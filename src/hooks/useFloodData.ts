@@ -7,7 +7,7 @@ import type { SensorReading, StationData, Alert, DashboardStats, ChartDataPoint 
 const STATION_CONFIG = {
   id: 'flood-monitor',
   name: 'Main Monitoring Station',
-  location: 'River Bank Monitoring Point',
+  location: 'Barangay Caroyroyan, Pili, Camarines Sur',
   lat: 14.5995,
   lng: 120.9842,
 };
