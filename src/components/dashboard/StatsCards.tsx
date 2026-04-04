@@ -28,6 +28,8 @@ const getStatusColor = (status: string) => {
   switch (status) {
     case 'normal':
       return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
+    case 'moderate':
+      return 'text-blue-500 bg-blue-500/10 border-blue-500/20';
     case 'warning':
       return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
     case 'critical':
@@ -85,10 +87,11 @@ export const StatsCards = ({ stats, currentReading }: StatsCardsProps) => {
     },
     {
       title: 'Alerts',
-      value: stats.warningStations + stats.criticalStations,
+      value: (stats.moderateStations ?? 0) + stats.warningStations + stats.criticalStations,
       icon: stats.criticalStations > 0 ? AlertOctagon : stats.warningStations > 0 ? AlertTriangle : Activity,
-      color: stats.criticalStations > 0 ? 'text-red-500 bg-red-500/10 border-red-500/20' : 
-             stats.warningStations > 0 ? 'text-amber-500 bg-amber-500/10 border-amber-500/20' : 
+      color: stats.criticalStations > 0  ? 'text-red-500 bg-red-500/10 border-red-500/20' :
+             stats.warningStations > 0   ? 'text-amber-500 bg-amber-500/10 border-amber-500/20' :
+             (stats.moderateStations ?? 0) > 0 ? 'text-blue-500 bg-blue-500/10 border-blue-500/20' :
              'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
       trend: null,
       subtitle: 'Flood Warnings'
@@ -115,7 +118,7 @@ export const StatsCards = ({ stats, currentReading }: StatsCardsProps) => {
             {card.trend && (
               <div className={`flex items-center gap-1 text-[10px] sm:text-xs mt-0.5 ${card.trend.color}`}>
                 <card.trend.icon className="h-3 w-3" />
-                <span className="truncate">{card.trend.value}m</span>
+                <span className="truncate">{card.trend.value}cm</span>
               </div>
             )}
             {card.subtitle && !card.trend && (

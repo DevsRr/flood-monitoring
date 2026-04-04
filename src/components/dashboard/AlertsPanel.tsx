@@ -32,6 +32,7 @@ const getSeverityBorder = (severity: string) => {
   switch (severity) {
     case 'critical': return 'border-red-500/40 bg-red-500/5 hover:border-red-500/60';
     case 'high':     return 'border-orange-500/40 bg-orange-500/5 hover:border-orange-500/60';
+    case 'medium':   return 'border-blue-500/40 bg-blue-500/5 hover:border-blue-500/60';
     default:         return 'border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50';
   }
 };
@@ -55,7 +56,10 @@ export const AlertsPanel = ({ alerts, onAcknowledge }: AlertsPanelProps) => {
       {/* Top row: icon + title + badge */}
       <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
         <AlertTriangle className={`h-4 w-4 shrink-0 ${
-          alert.severity === 'critical' ? 'text-red-500' : 'text-amber-500'
+          alert.severity === 'critical' ? 'text-red-500' :
+          alert.severity === 'high'     ? 'text-orange-500' :
+          alert.severity === 'medium'   ? 'text-blue-500' :
+          'text-amber-500'
         }`} />
         <span className="font-semibold text-xs sm:text-sm">Flood Warning</span>
         <Badge

@@ -7,16 +7,16 @@ import type { SensorReading, StationData, Alert, DashboardStats, ChartDataPoint 
 const STATION_CONFIG = {
   id: 'flood-monitor',
   name: 'Main Monitoring Station',
-  location: 'Barangay Caroyroyan, Pili, Camarines Sur',
+  location: 'River Bank Monitoring Point',
   lat: 14.5995,
   lng: 120.9842,
 };
 
 // ESP32 status labels → webapp status
-const mapEsp32Status = (esp32Status: string): 'normal' | 'warning' | 'critical' | 'offline' => {
+const mapEsp32Status = (esp32Status: string): 'normal' | 'moderate' | 'warning' | 'critical' | 'offline' => {
   switch (esp32Status?.toUpperCase()) {
     case 'LOW':      return 'normal';
-    case 'MODERATE': return 'normal';
+    case 'MODERATE': return 'moderate';
     case 'HIGH':     return 'warning';
     case 'CRITICAL': return 'critical';
     default:         return 'offline';
@@ -86,6 +86,18 @@ const generateAlert = (reading: SensorReading): Alert | null => {
       type: 'flood_warning',
       message: `High water level warning: ${reading.waterLevel}cm`,
       severity: 'high',
+      acknowledged: false,
+    };
+  }
+  if (reading.status === 'moderate') {
+    return {
+      id: `alert-${reading.id}`,
+      timestamp: reading.timestamp,
+      stationId: reading.sensorId,
+      stationName: STATION_CONFIG.name,
+      type: 'flood_warning',
+      message: `Moderate water level: ${reading.waterLevel}cm — Please monitor closely`,
+      severity: 'medium',
       acknowledged: false,
     };
   }
@@ -249,11 +261,19 @@ export const useFloodData = () => {
         );
         setChartData(buildChartData(readings, currentTimeRange));
 
-        // Seed alerts from history — last 20 warning/critical readings
+        // Seed alerts from history — only last 5 warning/critical readings
+        // Restore previously acknowledged alert IDs from localStorage
+        const acknowledgedIds: string[] = JSON.parse(
+          localStorage.getItem('acknowledgedAlerts') || '[]'
+        );
         const historyAlerts: Alert[] = readings
-          .filter(r => r.status === 'warning' || r.status === 'critical')
-          .slice(-20)
-          .map(r => generateAlert(r))
+          .filter(r => r.status === 'moderate' || r.status === 'warning' || r.status === 'critical')
+          .slice(-5)
+          .map(r => {
+            const alert = generateAlert(r);
+            if (!alert) return null;
+            return { ...alert, acknowledged: acknowledgedIds.includes(alert.id) };
+          })
           .filter((a): a is Alert => a !== null);
         if (historyAlerts.length > 0) {
           setAlerts(historyAlerts);
