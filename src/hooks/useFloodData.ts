@@ -1,9 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
-import { onValue, off } from 'firebase/database';
-import { database, dbHelpers } from '@/lib/firebase';
-import type { SensorReading, StationData, Alert, DashboardStats, ChartDataPoint } from '@/types/floodData';
+import { onValue, push, update } from 'firebase/database';
+import { database, dbHelpers, ref } from '@/lib/firebase';
+import type {
+  Alert,
+  ChartDataPoint,
+  ComponentStatus,
+  DashboardStats,
+  SensorReading,
+  StationData,
+} from '@/types/floodData';
 
-// Single station configuration
 const STATION_CONFIG = {
   id: 'flood-monitor',
   name: 'Main Monitoring Station',
@@ -12,113 +18,143 @@ const STATION_CONFIG = {
   lng: 120.9842,
 };
 
-// ESP32 status labels → webapp status
-const mapEsp32Status = (esp32Status: string): 'normal' | 'moderate' | 'warning' | 'critical' | 'offline' => {
-  switch (esp32Status?.toUpperCase()) {
-    case 'LOW':      return 'normal';
-    case 'MODERATE': return 'moderate';
-    case 'HIGH':     return 'warning';
-    case 'CRITICAL': return 'critical';
-    default:         return 'offline';
-  }
-};
+type NormalizedStatus = 'normal' | 'moderate' | 'warning' | 'critical' | 'offline';
 
-// ESP32 raw shapes
 interface Esp32Current {
-  waterlevel: number; // cm
-  status: string;     // "LOW" | "MODERATE" | "HIGH" | "CRITICAL"
+  waterlevel?: number;
+  waterLevel?: number;
+  status?: string;
+  time?: string;
+  updatedAt?: string;
 }
 
-interface Esp32HistoryEntry {
-  waterlevel: number;
-  status: string;
-  time?: string; // "2026-03-24 20:23:36" — use this if present
+interface Esp32HistoryEntry extends Esp32Current {
+  source?: 'SENSOR' | 'MANUAL';
+  acknowledged?: boolean;
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
+  createdBy?: string;
 }
-
-// Key format: "2026-03-24_20-23-36" (YYYY-MM-DD_HH-MM-SS)
-// Also supports old format: "2026-02-20_20:00"
-const keyToTimestamp = (key: string, entry?: Esp32HistoryEntry): number => {
-  // Prefer the time field if available — most accurate
-  if (entry?.time) {
-    const parsed = Date.parse(entry.time.replace(' ', 'T'));
-    if (!isNaN(parsed)) return parsed;
-  }
-  // Fall back to parsing the key
-  const [datePart, timePart] = key.split('_');
-  if (!datePart || !timePart) return Date.now();
-  // Replace dashes in time part with colons: "20-23-36" → "20:23:36"
-  const isoString = `${datePart}T${timePart.replace(/-/g, ':')}`;
-  const parsed = Date.parse(isoString);
-  return isNaN(parsed) ? Date.now() : parsed;
-};
-
-const toSensorReading = (
-  raw: Esp32Current | Esp32HistoryEntry,
-  timestamp: number
-): SensorReading => ({
-  id: `${STATION_CONFIG.id}-${timestamp}`,
-  timestamp,
-  waterLevel: parseFloat(raw.waterlevel.toFixed(2)), // raw cm
-  location: STATION_CONFIG.location,
-  sensorId: STATION_CONFIG.id,
-  status: mapEsp32Status(raw.status),
-});
-
-const generateAlert = (reading: SensorReading): Alert | null => {
-  if (reading.status === 'critical') {
-    return {
-      id: `alert-${reading.id}`,
-      timestamp: reading.timestamp,
-      stationId: reading.sensorId,
-      stationName: STATION_CONFIG.name,
-      type: 'flood_warning',
-      message: `Critical water level: ${reading.waterLevel}cm — Immediate action required`,
-      severity: 'critical',
-      acknowledged: false,
-    };
-  }
-  if (reading.status === 'warning') {
-    return {
-      id: `alert-${reading.id}`,
-      timestamp: reading.timestamp,
-      stationId: reading.sensorId,
-      stationName: STATION_CONFIG.name,
-      type: 'flood_warning',
-      message: `High water level warning: ${reading.waterLevel}cm`,
-      severity: 'high',
-      acknowledged: false,
-    };
-  }
-  if (reading.status === 'moderate') {
-    return {
-      id: `alert-${reading.id}`,
-      timestamp: reading.timestamp,
-      stationId: reading.sensorId,
-      stationName: STATION_CONFIG.name,
-      type: 'flood_warning',
-      message: `Moderate water level: ${reading.waterLevel}cm — Please monitor closely`,
-      severity: 'medium',
-      acknowledged: false,
-    };
-  }
-  return null;
-};
 
 export type TimeRange = '1h' | '6h' | '24h' | '1w' | '1m' | '1y';
 
 const timeRangeToHours: Record<TimeRange, number> = {
-  '1h':  1,
-  '6h':  6,
+  '1h': 1,
+  '6h': 6,
   '24h': 24,
-  '1w':  168,
-  '1m':  720,
-  '1y':  8760,
+  '1w': 168,
+  '1m': 720,
+  '1y': 8760,
+};
+
+const mapEsp32Status = (esp32Status?: string): NormalizedStatus => {
+  switch (esp32Status?.toUpperCase()) {
+    case 'LOW':
+    case 'NORMAL':
+      return 'normal';
+    case 'MEDIUM':
+    case 'MODERATE':
+      return 'moderate';
+    case 'HIGH':
+    case 'WARNING':
+      return 'warning';
+    case 'CRITICAL':
+      return 'critical';
+    default:
+      return 'offline';
+  }
+};
+
+const getRawWaterLevel = (raw: Esp32Current): number | null => {
+  const value = raw.waterLevel ?? raw.waterlevel;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+};
+
+const keyToTimestamp = (key: string, entry?: Esp32HistoryEntry): number => {
+  const candidateTime = entry?.time ?? entry?.updatedAt;
+  if (candidateTime) {
+    const parsed = Date.parse(candidateTime.replace(' ', 'T'));
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+
+  const [datePart, timePart] = key.split('_');
+  if (!datePart || !timePart) return Date.now();
+
+  const isoString = `${datePart}T${timePart.replace(/-/g, ':')}`;
+  const parsed = Date.parse(isoString);
+  return Number.isNaN(parsed) ? Date.now() : parsed;
+};
+
+const toSensorReading = (
+  raw: Esp32Current | Esp32HistoryEntry,
+  timestamp: number,
+  recordKey?: string
+): SensorReading | null => {
+  const waterLevel = getRawWaterLevel(raw);
+  if (waterLevel === null) return null;
+
+  return {
+    id: recordKey ?? `${STATION_CONFIG.id}-${timestamp}`,
+    recordKey,
+    timestamp,
+    waterLevel: parseFloat(waterLevel.toFixed(2)),
+    location: STATION_CONFIG.location,
+    sensorId: STATION_CONFIG.id,
+    status: mapEsp32Status(raw.status),
+    source: 'source' in raw ? raw.source : 'SENSOR',
+    acknowledged: 'acknowledged' in raw ? raw.acknowledged === true : false,
+    acknowledgedAt: 'acknowledgedAt' in raw ? raw.acknowledgedAt : undefined,
+    acknowledgedBy: 'acknowledgedBy' in raw ? raw.acknowledgedBy : undefined,
+  };
+};
+
+const generateAlert = (reading: SensorReading): Alert | null => {
+  const alertBase = {
+    id: `alert-${reading.recordKey ?? reading.id}`,
+    recordKey: reading.recordKey,
+    timestamp: reading.timestamp,
+    stationId: reading.sensorId,
+    stationName: STATION_CONFIG.name,
+    type: 'flood_warning' as const,
+    acknowledged: reading.acknowledged === true,
+    acknowledgedAt: reading.acknowledgedAt,
+    acknowledgedBy: reading.acknowledgedBy,
+    source: reading.source,
+  };
+
+  if (reading.status === 'critical') {
+    return {
+      ...alertBase,
+      message: `Critical water level: ${reading.waterLevel}cm - Immediate action required`,
+      severity: 'critical',
+    };
+  }
+
+  if (reading.status === 'warning') {
+    return {
+      ...alertBase,
+      message: reading.source === 'MANUAL'
+        ? 'Manual high water alert created by admin'
+        : `High water level warning: ${reading.waterLevel}cm`,
+      severity: 'high',
+    };
+  }
+
+  if (reading.status === 'moderate') {
+    return {
+      ...alertBase,
+      message: `Moderate water level: ${reading.waterLevel}cm - Please monitor closely`,
+      severity: 'medium',
+    };
+  }
+
+  return null;
 };
 
 const buildChartData = (readings: SensorReading[], range: TimeRange): ChartDataPoint[] => {
   const hours = timeRangeToHours[range];
   const cutoff = Date.now() - hours * 60 * 60 * 1000;
-  const filtered = readings.filter(r => r.timestamp >= cutoff);
+  const filtered = readings.filter((reading) => reading.timestamp >= cutoff);
 
   let interval: number;
   let timeFormat: Intl.DateTimeFormatOptions;
@@ -134,25 +170,44 @@ const buildChartData = (readings: SensorReading[], range: TimeRange): ChartDataP
     timeFormat = { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
   } else if (hours <= 720) {
     interval = 24 * 60 * 60 * 1000;
-    timeFormat = { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
+    timeFormat = { month: 'short', day: '2-digit', minute: '2-digit', hour12: false };
   } else {
     interval = 7 * 24 * 60 * 60 * 1000;
     timeFormat = { month: 'short', day: '2-digit' };
   }
 
   const aggregated: ChartDataPoint[] = [];
-  for (let t = cutoff; t <= Date.now(); t += interval) {
-    const bucket = filtered.filter(r => r.timestamp >= t && r.timestamp < t + interval);
+  for (let timestamp = cutoff; timestamp <= Date.now(); timestamp += interval) {
+    const bucket = filtered.filter(
+      (reading) => reading.timestamp >= timestamp && reading.timestamp < timestamp + interval
+    );
+
     if (bucket.length > 0) {
       aggregated.push({
-        timestamp: new Date(t).toLocaleString('en-US', timeFormat),
+        timestamp: new Date(timestamp).toLocaleString('en-US', timeFormat),
         waterLevel: parseFloat(
-          (bucket.reduce((s, r) => s + r.waterLevel, 0) / bucket.length).toFixed(2)
+          (bucket.reduce((sum, reading) => sum + reading.waterLevel, 0) / bucket.length).toFixed(2)
         ),
       });
     }
   }
+
   return aggregated;
+};
+
+const getComponentStatus = (
+  reading: SensorReading | null,
+  isConnected: boolean,
+  lastUpdate: Date
+): ComponentStatus => {
+  const updatedRecently = Date.now() - lastUpdate.getTime() <= 30_000;
+
+  return {
+    redLedOnline: reading?.status === 'warning' || reading?.status === 'critical',
+    orangeLedOnline: reading?.status === 'moderate',
+    greenLedOnline: reading?.status === 'normal',
+    ultrasonicOnline: Boolean(reading?.waterLevel !== undefined && isConnected && updatedRecently),
+  };
 };
 
 export const useFloodData = () => {
@@ -162,6 +217,7 @@ export const useFloodData = () => {
   const [stats, setStats] = useState<DashboardStats>({
     totalStations: 1,
     activeStations: 0,
+    moderateStations: 0,
     warningStations: 0,
     criticalStations: 0,
     offlineStations: 1,
@@ -170,146 +226,168 @@ export const useFloodData = () => {
   });
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date(0));
   const [isConnected, setIsConnected] = useState(false);
   const [currentTimeRange, setCurrentTimeRange] = useState<TimeRange>('24h');
+  const [componentStatus, setComponentStatus] = useState<ComponentStatus>({
+    redLedOnline: false,
+    orangeLedOnline: false,
+    greenLedOnline: false,
+    ultrasonicOnline: false,
+  });
 
-  // ── Live current reading from /floodmonitoring ──────────────────────────────
   useEffect(() => {
     const currentRef = dbHelpers.getCurrentRef();
 
-    const unsub = onValue(
+    const unsubscribe = onValue(
       currentRef,
       (snapshot) => {
-        if (!snapshot.exists()) return;
+        if (!snapshot.exists()) {
+          setIsConnected(false);
+          setLoading(false);
+          return;
+        }
 
         const raw = snapshot.val();
+        const rawCurrent = raw.currentStatus ?? raw.sensors ?? raw;
+        const timestamp = Date.now();
+        const reading = toSensorReading(rawCurrent, timestamp);
 
-        const currentRaw: Esp32Current = {
-          waterlevel: raw.waterlevel,
-          status: raw.status,
-        };
+        if (!reading) {
+          setLoading(false);
+          return;
+        }
 
-        if (currentRaw.waterlevel == null) return;
-
-        const reading = toSensorReading(currentRaw, Date.now());
-
-        setStation(prev => ({
-          ...(prev ?? STATION_CONFIG),
+        const updateTime = new Date();
+        setStation((previous) => ({
+          ...(previous ?? STATION_CONFIG),
           currentReading: reading,
-          history: prev?.history ?? [],
+          history: previous?.history ?? [],
         }));
-
+        setLastUpdate(updateTime);
         setIsConnected(true);
-        setLastUpdate(new Date());
         setLoading(false);
+        setComponentStatus(getComponentStatus(reading, true, updateTime));
 
-        setStats(prev => ({
-          ...prev,
+        setStats((previous) => ({
+          ...previous,
           activeStations: reading.status !== 'offline' ? 1 : 0,
+          moderateStations: reading.status === 'moderate' ? 1 : 0,
           warningStations: reading.status === 'warning' ? 1 : 0,
           criticalStations: reading.status === 'critical' ? 1 : 0,
           offlineStations: reading.status === 'offline' ? 1 : 0,
           avgWaterLevel: reading.waterLevel,
-          maxWaterLevel: Math.max(prev.maxWaterLevel, reading.waterLevel),
+          maxWaterLevel: Math.max(previous.maxWaterLevel, reading.waterLevel),
         }));
-
-        const alert = generateAlert(reading);
-        if (alert) {
-          setAlerts(prev => {
-            // Deduplicate by id only — prevent the exact same reading firing twice
-            const alreadyExists = prev.some(a => a.id === alert.id);
-            return alreadyExists ? prev : [...prev.slice(-19), alert];
-          });
-        }
       },
-      (error) => {
-        console.error('Firebase current reading error:', error);
+      () => {
         setIsConnected(false);
         setLoading(false);
       }
     );
 
-    return () => off(currentRef, 'value', unsub);
+    return () => unsubscribe();
   }, []);
 
-  // ── History from /floodmonitoring/history ───────────────────────────────────
-  // Keys: "2026-02-20_20:00", values: { waterlevel, status }
   useEffect(() => {
     const historyRef = dbHelpers.getHistoryRef(500);
 
-    const unsub = onValue(
+    const unsubscribe = onValue(
       historyRef,
       (snapshot) => {
-        if (!snapshot.exists()) return;
+        if (!snapshot.exists()) {
+          setHistory([]);
+          setAlerts([]);
+          setLoading(false);
+          return;
+        }
 
         const raw = snapshot.val() as Record<string, Esp32HistoryEntry>;
-
-        const readings: SensorReading[] = Object.entries(raw)
-          .map(([key, entry]) => toSensorReading(entry, keyToTimestamp(key, entry)))
-          .sort((a, b) => a.timestamp - b.timestamp); // oldest → newest
+        const readings = Object.entries(raw)
+          .map(([key, entry]) => toSensorReading(entry, keyToTimestamp(key, entry), key))
+          .filter((reading): reading is SensorReading => reading !== null)
+          .sort((a, b) => a.timestamp - b.timestamp);
 
         setHistory(readings);
-        setStation(prev =>
-          prev
-            ? { ...prev, history: readings }
+        setStation((previous) =>
+          previous
+            ? { ...previous, history: readings }
             : {
                 ...STATION_CONFIG,
                 currentReading: readings[readings.length - 1],
                 history: readings,
               }
         );
-        setChartData(buildChartData(readings, currentTimeRange));
 
-        // Seed alerts from history — only last 5 warning/critical readings
-        // Restore previously acknowledged alert IDs from localStorage
-        const acknowledgedIds: string[] = JSON.parse(
-          localStorage.getItem('acknowledgedAlerts') || '[]'
-        );
-        const historyAlerts: Alert[] = readings
-          .filter(r => r.status === 'moderate' || r.status === 'warning' || r.status === 'critical')
-          .slice(-5)
-          .map(r => {
-            const alert = generateAlert(r);
-            if (!alert) return null;
-            return { ...alert, acknowledged: acknowledgedIds.includes(alert.id) };
-          })
-          .filter((a): a is Alert => a !== null);
-        if (historyAlerts.length > 0) {
-          setAlerts(historyAlerts);
+        const historyAlerts = readings
+          .filter((reading) => ['moderate', 'warning', 'critical'].includes(reading.status))
+          .slice(-10)
+          .map(generateAlert)
+          .filter((alert): alert is Alert => alert !== null);
+
+        setAlerts(historyAlerts);
+
+        const levels = readings.map((reading) => reading.waterLevel);
+        if (levels.length > 0) {
+          const max = Math.max(...levels);
+          const avg = levels.reduce((sum, level) => sum + level, 0) / levels.length;
+          setStats((previous) => ({
+            ...previous,
+            avgWaterLevel: parseFloat(avg.toFixed(2)),
+            maxWaterLevel: parseFloat(max.toFixed(2)),
+          }));
         }
 
-        const levels = readings.map(r => r.waterLevel);
-        const max = Math.max(...levels);
-        const avg = levels.reduce((a, b) => a + b, 0) / levels.length;
-        setStats(prev => ({
-          ...prev,
-          avgWaterLevel: parseFloat(avg.toFixed(2)),
-          maxWaterLevel: parseFloat(max.toFixed(2)),
-        }));
+        setLoading(false);
       },
-      (error) => {
-        console.error('Firebase history error:', error);
+      () => {
+        setLoading(false);
       }
     );
 
-    return () => off(historyRef, 'value', unsub);
-  }, [currentTimeRange]);
-
-  // ── Actions ─────────────────────────────────────────────────────────────────
-  const acknowledgeAlert = useCallback((alertId: string) => {
-    setAlerts(prev =>
-      prev.map(a => (a.id === alertId ? { ...a, acknowledged: true } : a))
-    );
+    return () => unsubscribe();
   }, []);
 
-  const setTimeRange = useCallback(
-    (range: TimeRange) => {
-      setCurrentTimeRange(range);
-      setChartData(buildChartData(history, range));
-    },
-    [history]
-  );
+  useEffect(() => {
+    setChartData(buildChartData(history, currentTimeRange));
+  }, [history, currentTimeRange]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setComponentStatus((previous) => ({
+        ...previous,
+        ultrasonicOnline: Boolean(station?.currentReading?.waterLevel !== undefined && isConnected && Date.now() - lastUpdate.getTime() <= 30_000),
+      }));
+    }, 5_000);
+
+    return () => window.clearInterval(timer);
+  }, [isConnected, lastUpdate, station?.currentReading?.waterLevel]);
+
+  const acknowledgeAlert = useCallback(async (alertId: string, acknowledgedBy = 'System User') => {
+    const alert = alerts.find((currentAlert) => currentAlert.id === alertId);
+    if (!alert?.recordKey) return;
+
+    await update(dbHelpers.getHistoryRecordRef(alert.recordKey), {
+      acknowledged: true,
+      acknowledgedAt: new Date().toISOString(),
+      acknowledgedBy,
+    });
+  }, [alerts]);
+
+  const createManualAlert = useCallback(async (createdBy: string) => {
+    await push(ref(database, 'floodmonitoring/history'), {
+      status: 'HIGH',
+      waterLevel: 0,
+      source: 'MANUAL',
+      createdBy,
+      time: new Date().toISOString(),
+      acknowledged: false,
+    });
+  }, []);
+
+  const setTimeRange = useCallback((range: TimeRange) => {
+    setCurrentTimeRange(range);
+  }, []);
 
   const getHistoryByTimeRange = useCallback(
     (range: TimeRange): ChartDataPoint[] => buildChartData(history, range),
@@ -325,8 +403,10 @@ export const useFloodData = () => {
     loading,
     lastUpdate,
     isConnected,
+    componentStatus,
     currentTimeRange,
     acknowledgeAlert,
+    createManualAlert,
     setTimeRange,
     getHistoryByTimeRange,
   };

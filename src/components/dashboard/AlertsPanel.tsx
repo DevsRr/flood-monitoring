@@ -5,14 +5,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   AlertTriangle, 
   Check,
-  Bell,
   Clock
 } from 'lucide-react';
 import type { Alert } from '@/types/floodData';
 
 interface AlertsPanelProps {
   alerts: Alert[];
-  onAcknowledge: (alertId: string) => void;
+  canAcknowledge: boolean;
+  onAcknowledge: (alertId: string) => Promise<void>;
 }
 
 const getSeverityColor = (severity: string) => {
@@ -37,7 +37,7 @@ const getSeverityBorder = (severity: string) => {
   }
 };
 
-export const AlertsPanel = ({ alerts, onAcknowledge }: AlertsPanelProps) => {
+export const AlertsPanel = ({ alerts, canAcknowledge, onAcknowledge }: AlertsPanelProps) => {
   const floodAlerts = alerts.filter(a => a.type === 'flood_warning');
   const unacknowledgedAlerts = floodAlerts.filter(a => !a.acknowledged);
   const acknowledgedAlerts = floodAlerts.filter(a => a.acknowledged);
@@ -88,7 +88,7 @@ export const AlertsPanel = ({ alerts, onAcknowledge }: AlertsPanelProps) => {
             })}
           </span>
         </div>
-        {!alert.acknowledged && (
+        {!alert.acknowledged && canAcknowledge && (
           <Button
             variant="outline"
             size="sm"
@@ -122,7 +122,7 @@ export const AlertsPanel = ({ alerts, onAcknowledge }: AlertsPanelProps) => {
           <div className="px-3 sm:px-4 pb-3 sm:pb-4">
             {floodAlerts.length === 0 ? (
               <div className="text-center py-6 sm:py-8 text-muted-foreground">
-                <Bell className="h-8 w-8 sm:h-10 sm:w-10 mx-auto mb-2 opacity-30" />
+                <AlertTriangle className="h-8 w-8 sm:h-10 sm:w-10 mx-auto mb-2 opacity-30" />
                 <p className="text-xs sm:text-sm">No flood warnings</p>
               </div>
             ) : (

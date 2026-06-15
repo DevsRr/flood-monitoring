@@ -1,5 +1,6 @@
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, off, query, limitToLast, orderByChild, set, push, update } from 'firebase/database';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getDatabase, ref, onValue, off, query, limitToLast, orderByChild, set, push, update, get } from 'firebase/database';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDVLgBYZRQ25jOH3q141w1dyj2kTxUWNDE",
@@ -12,12 +13,21 @@ const firebaseConfig = {
   measurementId: "G-XTCVVPJ0MK"
 };
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const userManagementApp = getApps().some((firebaseApp) => firebaseApp.name === 'user-management')
+  ? getApp('user-management')
+  : initializeApp(firebaseConfig, 'user-management');
+
 export const database = getDatabase(app);
+export const auth = getAuth(app);
+export const userManagementAuth = getAuth(userManagementApp);
 
 export const DB_PATHS = {
   CURRENT: 'floodmonitoring',
+  CURRENT_STATUS: 'floodmonitoring/currentStatus',
+  SENSORS: 'floodmonitoring/sensors',
   HISTORY: 'floodmonitoring/history',
+  USERS: 'floodmonitoring/users',
 } as const;
 
 export const dbHelpers = {
@@ -31,7 +41,19 @@ export const dbHelpers = {
       limitToLast(limit)
     );
   },
+
+  getHistoryRecordRef: (recordKey: string) => {
+    return ref(database, `${DB_PATHS.HISTORY}/${recordKey}`);
+  },
+
+  getUsersRef: () => {
+    return ref(database, DB_PATHS.USERS);
+  },
+
+  getUserRef: (uid: string) => {
+    return ref(database, `${DB_PATHS.USERS}/${uid}`);
+  },
 };
 
-export { ref, onValue, off, query, limitToLast, orderByChild, set, push, update };
+export { ref, onValue, off, query, limitToLast, orderByChild, set, push, update, get };
 export default app;

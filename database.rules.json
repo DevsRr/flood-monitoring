@@ -1,0 +1,18 @@
+{
+  "rules": {
+    "floodmonitoring": {
+      ".read": "auth != null && root.child('floodmonitoring/users').child(auth.uid).exists() && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
+      ".write": "auth != null && root.child('floodmonitoring/users').child(auth.uid).child('role').val() === 'Admin' && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
+      "users": {
+        "$uid": {
+          ".validate": "newData.hasChildren(['name', 'email', 'role', 'disabled']) && (newData.child('role').val() === 'Admin' || newData.child('role').val() === 'User')"
+        }
+      },
+      "history": {
+        "$recordKey": {
+          ".validate": "newData.hasChild('status') && newData.hasChild('time')"
+        }
+      }
+    }
+  }
+}

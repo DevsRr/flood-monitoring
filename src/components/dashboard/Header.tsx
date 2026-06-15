@@ -1,55 +1,43 @@
 import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Droplets, 
-  Clock, 
-  RefreshCw, 
-  Bell,
-  Settings,
-  Menu,
-  Wifi,
-  WifiOff
-} from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
+import { AlertTriangle, Clock, Droplets, LogOut, RefreshCw, Users, Wifi, WifiOff } from 'lucide-react';
+import type { AppUser } from '@/types/floodData';
 
 interface HeaderProps {
   lastUpdate: Date;
   isConnected: boolean;
   onRefresh: () => void;
-  unacknowledgedAlerts: number;
+  user: AppUser;
+  onManualAlert: () => void;
+  onManageUsers: () => void;
+  onSignOut: () => void;
 }
 
-export const Header = ({ lastUpdate, isConnected, onRefresh, unacknowledgedAlerts }: HeaderProps) => {
+export const Header = ({
+  lastUpdate,
+  isConnected,
+  onRefresh,
+  user,
+  onManualAlert,
+  onManageUsers,
+  onSignOut,
+}: HeaderProps) => {
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [menuOpen, setMenuOpen] = useState(false);
+  const isAdmin = user.role === 'Admin';
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const timer = window.setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
-    return () => clearInterval(timer);
+
+    return () => window.clearInterval(timer);
   }, []);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 sm:h-16 items-center justify-between px-3 sm:px-4">
-        {/* Logo & Title */}
-        <div className="flex items-center gap-2 sm:gap-3">
+      <div className="container flex min-h-14 sm:min-h-16 items-center justify-between gap-2 px-3 sm:px-4 py-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <div className="bg-gradient-to-br from-blue-500 to-cyan-400 p-1.5 sm:p-2 rounded-lg shrink-0">
             <Droplets className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
           </div>
@@ -59,13 +47,12 @@ export const Header = ({ lastUpdate, isConnected, onRefresh, unacknowledgedAlert
             </h1>
             <p className="hidden sm:block text-[10px] text-muted-foreground">Flood Monitoring System</p>
           </div>
-          
-          {/* Connection Status - Desktop */}
-          <Badge 
-            variant="outline" 
+
+          <Badge
+            variant="outline"
             className={`hidden md:flex items-center gap-1 text-[10px] h-5 px-1.5 ${
-              isConnected 
-                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' 
+              isConnected
+                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
                 : 'bg-red-500/10 text-red-600 border-red-500/20'
             }`}
           >
@@ -74,7 +61,6 @@ export const Header = ({ lastUpdate, isConnected, onRefresh, unacknowledgedAlert
           </Badge>
         </div>
 
-        {/* Center - Time - Desktop Only */}
         <div className="hidden lg:flex items-center gap-4 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" />
@@ -82,105 +68,49 @@ export const Header = ({ lastUpdate, isConnected, onRefresh, unacknowledgedAlert
           </div>
           <div className="flex items-center gap-1.5">
             <RefreshCw className="h-3.5 w-3.5" />
-            <span>Updated: {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <span>
+              Updated: {lastUpdate.getTime() > 0 ? lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+            </span>
           </div>
         </div>
 
-        {/* Right - Actions */}
-        <div className="flex items-center gap-1 sm:gap-2">
-          {/* Connection Status - Mobile */}
-          <Badge 
-            variant="outline" 
+        <div className="flex items-center justify-end gap-1 sm:gap-2 flex-wrap">
+          <Badge
+            variant="outline"
             className={`md:hidden flex items-center gap-1 text-[10px] h-5 px-1.5 ${
-              isConnected 
-                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' 
+              isConnected
+                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
                 : 'bg-red-500/10 text-red-600 border-red-500/20'
             }`}
           >
             {isConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
           </Badge>
 
-          {/* Refresh Button */}
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={onRefresh}
-            className="h-8 w-8 sm:h-9 sm:w-9"
-          >
+          <div className="hidden sm:flex flex-col items-end leading-tight">
+            <span className="text-xs font-medium truncate max-w-[140px]">{user.name}</span>
+            <span className="text-[10px] text-muted-foreground">{user.role}</span>
+          </div>
+
+          {isAdmin && (
+            <>
+              <Button variant="outline" size="sm" onClick={onManualAlert} className="h-8 sm:h-9 px-2 sm:px-3 text-xs">
+                <AlertTriangle className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Manual Alert</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={onManageUsers} className="h-8 sm:h-9 px-2 sm:px-3 text-xs">
+                <Users className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Users</span>
+              </Button>
+            </>
+          )}
+
+          <Button variant="outline" size="icon" onClick={onRefresh} className="h-8 w-8 sm:h-9 sm:w-9">
             <RefreshCw className="h-4 w-4" />
           </Button>
 
-          {/* Alerts Button */}
-          <Button 
-            variant="outline" 
-            size="icon"
-            className="relative h-8 w-8 sm:h-9 sm:w-9"
-          >
-            <Bell className="h-4 w-4" />
-            {unacknowledgedAlerts > 0 && (
-              <span className="absolute -top-1 -right-1 h-4 w-4 sm:h-5 sm:w-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center animate-pulse">
-                {unacknowledgedAlerts > 9 ? '9+' : unacknowledgedAlerts}
-              </span>
-            )}
+          <Button variant="outline" size="icon" onClick={onSignOut} className="h-8 w-8 sm:h-9 sm:w-9">
+            <LogOut className="h-4 w-4" />
           </Button>
-
-          {/* Settings - Desktop */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="hidden sm:flex h-8 w-8 sm:h-9 sm:w-9">
-                <Settings className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel>Settings</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>Alert Thresholds</DropdownMenuItem>
-              <DropdownMenuItem>Notifications</DropdownMenuItem>
-              <DropdownMenuItem>Data Export</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Mobile Menu */}
-          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="icon" className="md:hidden h-8 w-8">
-                <Menu className="h-4 w-4" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-[250px]">
-              <SheetHeader>
-                <SheetTitle className="text-left">Menu</SheetTitle>
-              </SheetHeader>
-              <div className="mt-4 space-y-4">
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Current Time</p>
-                  <p className="text-sm font-medium">{currentTime.toLocaleTimeString()}</p>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Last Update</p>
-                  <p className="text-sm font-medium">{lastUpdate.toLocaleTimeString()}</p>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Connection</p>
-                  <Badge 
-                    variant="outline" 
-                    className={`${
-                      isConnected 
-                        ? 'bg-emerald-500/10 text-emerald-600' 
-                        : 'bg-red-500/10 text-red-600'
-                    }`}
-                  >
-                    {isConnected ? 'Connected' : 'Disconnected'}
-                  </Badge>
-                </div>
-                <div className="pt-4 border-t space-y-2">
-                  <Button variant="ghost" className="w-full justify-start text-sm">Alert Thresholds</Button>
-                  <Button variant="ghost" className="w-full justify-start text-sm">Notifications</Button>
-                  <Button variant="ghost" className="w-full justify-start text-sm">Data Export</Button>
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
         </div>
       </div>
     </header>

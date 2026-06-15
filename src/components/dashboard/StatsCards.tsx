@@ -3,17 +3,19 @@ import {
   Activity, 
   AlertTriangle, 
   AlertOctagon, 
+  Cpu,
   Droplets, 
   TrendingUp,
   TrendingDown,
   Minus,
   Clock
 } from 'lucide-react';
-import type { DashboardStats, SensorReading } from '@/types/floodData';
+import type { ComponentStatus, DashboardStats, SensorReading } from '@/types/floodData';
 
 interface StatsCardsProps {
   stats: DashboardStats;
   currentReading?: SensorReading | null;
+  componentStatus: ComponentStatus;
 }
 
 const getTrend = (current: number, previous?: number) => {
@@ -41,8 +43,14 @@ const getStatusColor = (status: string) => {
   }
 };
 
-export const StatsCards = ({ stats, currentReading }: StatsCardsProps) => {
+export const StatsCards = ({ stats, currentReading, componentStatus }: StatsCardsProps) => {
   const waterLevelTrend = getTrend(currentReading?.waterLevel || 0, (currentReading?.waterLevel || 0) - 0.1);
+  const onlineComponents = [
+    componentStatus.redLedOnline,
+    componentStatus.orangeLedOnline,
+    componentStatus.greenLedOnline,
+    componentStatus.ultrasonicOnline,
+  ].filter(Boolean).length;
 
   const cards = [
     {
@@ -95,11 +103,21 @@ export const StatsCards = ({ stats, currentReading }: StatsCardsProps) => {
              'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
       trend: null,
       subtitle: 'Flood Warnings'
+    },
+    {
+      title: 'Component Status',
+      value: `${onlineComponents}/4`,
+      icon: Cpu,
+      color: componentStatus.ultrasonicOnline
+        ? 'text-teal-500 bg-teal-500/10 border-teal-500/20'
+        : 'text-slate-500 bg-slate-500/10 border-slate-500/20',
+      trend: null,
+      subtitle: 'Online'
     }
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
       {cards.map((card, index) => (
         <Card 
           key={index} 

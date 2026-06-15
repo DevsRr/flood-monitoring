@@ -1,10 +1,15 @@
 export interface SensorReading {
   id: string;
+  recordKey?: string;
   timestamp: number;
   waterLevel: number;
   location: string;
   sensorId: string;
-  status: 'normal' | 'warning' | 'critical' | 'offline';
+  status: 'normal' | 'moderate' | 'warning' | 'critical' | 'offline';
+  source?: 'SENSOR' | 'MANUAL';
+  acknowledged?: boolean;
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
 }
 
 export interface StationData {
@@ -19,6 +24,7 @@ export interface StationData {
 
 export interface Alert {
   id: string;
+  recordKey?: string;
   timestamp: number;
   stationId: string;
   stationName: string;
@@ -26,11 +32,15 @@ export interface Alert {
   message: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
   acknowledged: boolean;
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
+  source?: 'SENSOR' | 'MANUAL';
 }
 
 export interface DashboardStats {
   totalStations: number;
   activeStations: number;
+  moderateStations?: number;
   warningStations: number;
   criticalStations: number;
   offlineStations: number;
@@ -41,4 +51,19 @@ export interface DashboardStats {
 export interface ChartDataPoint {
   timestamp: string;
   waterLevel: number;
+}
+
+export interface ComponentStatus {
+  redLedOnline: boolean;
+  orangeLedOnline: boolean;
+  greenLedOnline: boolean;
+  ultrasonicOnline: boolean;
+}
+
+export interface AppUser {
+  uid: string;
+  name: string;
+  email: string;
+  role: 'Admin' | 'User';
+  disabled: boolean;
 }
