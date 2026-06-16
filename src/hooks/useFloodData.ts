@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { onValue, push, update } from 'firebase/database';
+import { onValue, push, set, update } from 'firebase/database';
 import { database, dbHelpers, ref } from '@/lib/firebase';
 import type {
   Alert,
@@ -375,15 +375,19 @@ export const useFloodData = () => {
   }, [alerts]);
 
   const createManualAlert = useCallback(async (createdBy: string) => {
-    await push(ref(database, 'floodmonitoring/history'), {
-      status: 'HIGH',
-      waterLevel: 0,
-      source: 'MANUAL',
-      createdBy,
-      time: new Date().toISOString(),
-      acknowledged: false,
-    });
-  }, []);
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const key = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+
+  await set(ref(database, `floodmonitoring/history/${key}`), {
+    status: 'HIGH',
+    waterLevel: 0,
+    source: 'MANUAL',
+    createdBy,
+    time: now.toISOString(),
+    acknowledged: false,
+  });
+}, []);
 
   const setTimeRange = useCallback((range: TimeRange) => {
     setCurrentTimeRange(range);
