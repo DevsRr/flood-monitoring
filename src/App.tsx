@@ -14,7 +14,6 @@ import { MainChart } from '@/components/dashboard/MainChart';
 import { AlertsPanel } from '@/components/dashboard/AlertsPanel';
 import { StationDetail } from '@/components/dashboard/StationDetail';
 import { ComponentStatusCard } from '@/components/dashboard/ComponentStatusCard';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -29,7 +28,6 @@ import { Label } from '@/components/ui/label';
 import { auth, dbHelpers } from '@/lib/firebase';
 import { useFloodData, type TimeRange } from '@/hooks/useFloodData';
 import type { AppUser, SensorReading } from '@/types/floodData';
-import { Activity, AlertTriangle, BarChart3, Droplets, Gauge, ShieldCheck, Waves } from 'lucide-react';
 import './App.css';
 
 function App() {
@@ -134,11 +132,11 @@ function App() {
     <div className="min-h-screen bg-background">
       <Toaster position="top-right" richColors />
 
-      {currentUser ? (
-        <Dashboard user={currentUser} onSignOut={handleSignOut} />
-      ) : (
-        <PublicLanding onLogin={() => setLoginOpen(true)} />
-      )}
+      <Dashboard
+        user={currentUser}
+        onLogin={() => setLoginOpen(true)}
+        onSignOut={handleSignOut}
+      />
 
       <LoginModal
         open={loginOpen && !currentUser}
@@ -155,11 +153,13 @@ function App() {
 }
 
 interface DashboardProps {
-  user: AppUser;
+  user: AppUser | null;
+  onLogin: () => void;
   onSignOut: () => Promise<void>;
 }
 
-const Dashboard = ({ user, onSignOut }: DashboardProps) => {
+const Dashboard = ({ user, onLogin, onSignOut }: DashboardProps) => {
+  const isAdmin = user?.role === 'Admin';
   const {
     station,
     history,
@@ -172,18 +172,20 @@ const Dashboard = ({ user, onSignOut }: DashboardProps) => {
     componentStatus,
     sirenOn,
     sirenLastUpdate,
+    sensorLastUpdate,
     currentTimeRange,
     acknowledgeAlert,
     updateSirenStatus,
     setTimeRange,
-  } = useFloodData();
+  } = useFloodData(isAdmin);
 
   const shownAlertIds = useRef<Set<string>>(new Set());
 
   const handleAcknowledge = useCallback(async (alertId: string) => {
+    if (!user) return;
     await acknowledgeAlert(alertId, user.email);
     toast.success('Alert acknowledged.');
-  }, [acknowledgeAlert, user.email]);
+  }, [acknowledgeAlert, user]);
 
   useEffect(() => {
     alerts
@@ -200,13 +202,15 @@ const Dashboard = ({ user, onSignOut }: DashboardProps) => {
             minute: '2-digit',
           }),
           duration: 10000,
-          action: {
-            label: 'Acknowledge',
-            onClick: () => handleAcknowledge(alert.id),
-          },
+          action: isAdmin
+            ? {
+                label: 'Acknowledge',
+                onClick: () => handleAcknowledge(alert.id),
+              }
+            : undefined,
         });
       });
-  }, [alerts, handleAcknowledge]);
+  }, [alerts, handleAcknowledge, isAdmin]);
 
   const handleRefresh = () => {
     toast.info('Refreshing data...');
@@ -243,6 +247,7 @@ const Dashboard = ({ user, onSignOut }: DashboardProps) => {
         isConnected={isConnected}
         onRefresh={handleRefresh}
         user={user}
+        onLogin={onLogin}
         onSignOut={onSignOut}
       />
 
@@ -251,20 +256,22 @@ const Dashboard = ({ user, onSignOut }: DashboardProps) => {
           <StatsCards
             stats={stats}
             currentReading={station?.currentReading}
-            componentStatus={componentStatus}
+            componentStatus={isAdmin ? componentStatus : undefined}
           />
         </section>
 
-        <section className="mb-4 sm:mb-6">
-          <ComponentStatusCard
-            status={componentStatus}
-            currentReading={station?.currentReading}
-            lastUpdate={lastUpdate}
-            sirenOn={sirenOn}
-            sirenLastUpdate={sirenLastUpdate}
-            onSirenToggle={handleSirenToggle}
-          />
-        </section>
+        {isAdmin && (
+          <section className="mb-4 sm:mb-6">
+            <ComponentStatusCard
+              status={componentStatus}
+              currentReading={station?.currentReading}
+              lastUpdate={sensorLastUpdate}
+              sirenOn={sirenOn}
+              sirenLastUpdate={sirenLastUpdate}
+              onSirenToggle={handleSirenToggle}
+            />
+          </section>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6 mb-4 sm:mb-6">
           <div className="lg:col-span-2">
@@ -278,7 +285,7 @@ const Dashboard = ({ user, onSignOut }: DashboardProps) => {
           <div className="lg:col-span-1">
             <AlertsPanel
               alerts={alerts}
-              canAcknowledge
+              canAcknowledge={isAdmin}
               onAcknowledge={handleAcknowledge}
             />
           </div>
@@ -312,103 +319,6 @@ const Dashboard = ({ user, onSignOut }: DashboardProps) => {
         </footer>
       </main>
     </>
-  );
-};
-
-interface PublicLandingProps {
-  onLogin: () => void;
-}
-
-const PublicLanding = ({ onLogin }: PublicLandingProps) => {
-  const publicFeatures = [
-    { title: 'Project Overview', text: 'A real-time flood monitoring system designed for fast situational awareness.', icon: Waves },
-    { title: 'Flood Information', text: 'Track water-level conditions and understand how alerts support community safety.', icon: AlertTriangle },
-    { title: 'Dashboard Overview', text: 'Admins can review charts, alert history, and protected device status after login.', icon: BarChart3 },
-    { title: 'System Description', text: 'ESP32 sensor readings are sent to Firebase and visualized in a responsive dashboard.', icon: Gauge },
-  ];
-
-  return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto flex min-h-14 sm:min-h-16 items-center justify-between gap-3 px-3 sm:px-4">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="bg-gradient-to-br from-blue-500 to-cyan-400 p-1.5 sm:p-2 rounded-lg shrink-0">
-              <Droplets className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-sm sm:text-lg font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent truncate">
-                FloodMonitor
-              </h1>
-              <p className="hidden sm:block text-[10px] text-muted-foreground">Flood Monitoring System</p>
-            </div>
-          </div>
-
-          <Button size="sm" onClick={onLogin} className="h-8 sm:h-9 px-3 text-xs">
-            Admin Login
-          </Button>
-        </div>
-      </header>
-
-      <main>
-        <section className="container mx-auto px-3 sm:px-4 py-10 sm:py-14">
-          <div className="max-w-3xl">
-            <Badge variant="outline" className="mb-4 bg-cyan-500/10 text-cyan-600 border-cyan-500/20">
-              Public Information
-            </Badge>
-            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight">
-              Community flood monitoring with real-time dashboard support.
-            </h2>
-            <p className="mt-4 text-sm sm:text-base text-muted-foreground max-w-2xl">
-              FloodMonitor helps present water-level information, system purpose, dashboard summaries, and public-facing safety context in one responsive web experience.
-            </p>
-          </div>
-        </section>
-
-        <section className="border-y bg-muted/30">
-          <div className="container mx-auto px-3 sm:px-4 py-8 sm:py-10">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {publicFeatures.map((feature) => {
-                const Icon = feature.icon;
-
-                return (
-                  <div key={feature.title} className="rounded-lg border bg-card p-4 hover:shadow-md transition-all duration-300">
-                    <div className="mb-3 inline-flex rounded-md bg-blue-500/10 p-2 text-blue-600">
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <h3 className="text-sm font-semibold">{feature.title}</h3>
-                    <p className="mt-2 text-xs text-muted-foreground leading-relaxed">{feature.text}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        <section className="container mx-auto px-3 sm:px-4 py-8 sm:py-10">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <div className="rounded-lg border bg-card p-4 lg:col-span-2">
-              <div className="flex items-center gap-2 mb-2">
-                <Activity className="h-4 w-4 text-emerald-600" />
-                <h3 className="text-sm font-semibold">Features Section</h3>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                The system supports flood status tracking, historical charts, alert review, and protected monitoring tools for authorized administrators.
-              </p>
-            </div>
-
-            <div className="rounded-lg border bg-card p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <ShieldCheck className="h-4 w-4 text-cyan-600" />
-                <h3 className="text-sm font-semibold">Protected Monitoring</h3>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Component status, device status, sensor readings, and controls are hidden from public users.
-              </p>
-            </div>
-          </div>
-        </section>
-      </main>
-    </div>
   );
 };
 

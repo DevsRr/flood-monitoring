@@ -15,7 +15,7 @@ import type { ComponentStatus, DashboardStats, SensorReading } from '@/types/flo
 interface StatsCardsProps {
   stats: DashboardStats;
   currentReading?: SensorReading | null;
-  componentStatus: ComponentStatus;
+  componentStatus?: ComponentStatus;
 }
 
 const getTrend = (current: number, previous?: number) => {
@@ -45,13 +45,15 @@ const getStatusColor = (status: string) => {
 
 export const StatsCards = ({ stats, currentReading, componentStatus }: StatsCardsProps) => {
   const waterLevelTrend = getTrend(currentReading?.waterLevel || 0, (currentReading?.waterLevel || 0) - 0.1);
-  const onlineComponents = [
-    componentStatus.redLedOnline,
-    componentStatus.orangeLedOnline,
-    componentStatus.greenLedOnline,
-    componentStatus.ultrasonicOnline,
-    componentStatus.sirenOn,
-  ].filter(Boolean).length;
+  const onlineComponents = componentStatus
+    ? [
+        componentStatus.redLedOnline,
+        componentStatus.orangeLedOnline,
+        componentStatus.greenLedOnline,
+        componentStatus.ultrasonicOnline,
+        componentStatus.sirenOn,
+      ].filter(Boolean).length
+    : 0;
 
   const cards = [
     {
@@ -105,7 +107,7 @@ export const StatsCards = ({ stats, currentReading, componentStatus }: StatsCard
       trend: null,
       subtitle: 'Flood Warnings'
     },
-    {
+    ...(componentStatus ? [{
       title: 'Component Status',
       value: `${onlineComponents}/5`,
       icon: Cpu,
@@ -114,11 +116,11 @@ export const StatsCards = ({ stats, currentReading, componentStatus }: StatsCard
         : 'text-slate-500 bg-slate-500/10 border-slate-500/20',
       trend: null,
       subtitle: 'Online'
-    }
+    }] : [])
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+    <div className={`grid grid-cols-2 sm:grid-cols-3 ${componentStatus ? 'lg:grid-cols-7' : 'lg:grid-cols-6'} gap-3`}>
       {cards.map((card, index) => (
         <Card 
           key={index} 

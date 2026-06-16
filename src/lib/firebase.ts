@@ -24,12 +24,11 @@ export const DB_PATHS = {
   SENSORS: 'floodmonitoring/sensors',
   HISTORY: 'floodmonitoring/history',
   USERS: 'floodmonitoring/users',
-  SIREN: 'status/siren',
 } as const;
 
 export const dbHelpers = {
   getCurrentRef: () => {
-    return ref(database, DB_PATHS.CURRENT);
+    return ref(database, DB_PATHS.CURRENT_STATUS);
   },
 
   getHistoryRef: (limit: number = 100) => {
@@ -51,8 +50,8 @@ export const dbHelpers = {
     return ref(database, `${DB_PATHS.USERS}/${uid}`);
   },
 
-  getSirenRef: () => {
-    return ref(database, DB_PATHS.SIREN);
+  getSensorsRef: () => {
+    return ref(database, DB_PATHS.SENSORS);
   },
 };
 

@@ -8,7 +8,8 @@ interface HeaderProps {
   lastUpdate: Date;
   isConnected: boolean;
   onRefresh: () => void;
-  user: AppUser;
+  user: AppUser | null;
+  onLogin: () => void;
   onSignOut: () => void;
 }
 
@@ -17,6 +18,7 @@ export const Header = ({
   isConnected,
   onRefresh,
   user,
+  onLogin,
   onSignOut,
 }: HeaderProps) => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -81,18 +83,26 @@ export const Header = ({
             {isConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
           </Badge>
 
-          <div className="hidden sm:flex flex-col items-end leading-tight">
-            <span className="text-xs font-medium truncate max-w-[140px]">{user.name}</span>
-            <span className="text-[10px] text-muted-foreground">{user.role}</span>
-          </div>
+          {user && (
+            <div className="hidden sm:flex flex-col items-end leading-tight">
+              <span className="text-xs font-medium truncate max-w-[140px]">{user.name}</span>
+              <span className="text-[10px] text-muted-foreground">{user.role}</span>
+            </div>
+          )}
 
           <Button variant="outline" size="icon" onClick={onRefresh} className="h-8 w-8 sm:h-9 sm:w-9">
             <RefreshCw className="h-4 w-4" />
           </Button>
 
-          <Button variant="outline" size="icon" onClick={onSignOut} className="h-8 w-8 sm:h-9 sm:w-9">
-            <LogOut className="h-4 w-4" />
-          </Button>
+          {user ? (
+            <Button variant="outline" size="icon" onClick={onSignOut} className="h-8 w-8 sm:h-9 sm:w-9">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button size="sm" onClick={onLogin} className="h-8 sm:h-9 px-3 text-xs">
+              Admin Login
+            </Button>
+          )}
         </div>
       </div>
     </header>

@@ -1,24 +1,28 @@
 {
   "rules": {
     "floodmonitoring": {
-      ".read": "auth != null && root.child('floodmonitoring/users').child(auth.uid).exists() && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
       ".write": "auth != null && root.child('floodmonitoring/users').child(auth.uid).child('role').val() === 'Admin' && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
+      "currentStatus": {
+        ".read": true
+      },
       "users": {
+        ".read": "auth != null && root.child('floodmonitoring/users').child(auth.uid).child('role').val() === 'Admin' && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
         "$uid": {
           ".validate": "newData.hasChildren(['name', 'email', 'role', 'disabled']) && (newData.child('role').val() === 'Admin' || newData.child('role').val() === 'User')"
         }
       },
       "history": {
+        ".read": true,
         "$recordKey": {
           ".validate": "newData.hasChild('status') && newData.hasChild('time')"
         }
-      }
-    },
-    "status": {
-      ".read": "auth != null && root.child('floodmonitoring/users').child(auth.uid).child('role').val() === 'Admin' && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
-      "siren": {
-        ".write": "auth != null && root.child('floodmonitoring/users').child(auth.uid).child('role').val() === 'Admin' && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
-        ".validate": "newData.val() === 0 || newData.val() === 1"
+      },
+      "sensors": {
+        ".read": "auth != null && root.child('floodmonitoring/users').child(auth.uid).child('role').val() === 'Admin' && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
+        "$sensorName": {
+          ".write": "auth != null && root.child('floodmonitoring/users').child(auth.uid).child('role').val() === 'Admin' && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
+          ".validate": "newData.val() === 0 || newData.val() === 1"
+        }
       }
     }
   }
