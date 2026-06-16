@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Clock, Droplets, LogOut, RefreshCw, Users, Wifi, WifiOff } from 'lucide-react';
+import { Clock, Droplets, LogOut, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import type { AppUser } from '@/types/floodData';
 
 interface HeaderProps {
@@ -9,8 +9,6 @@ interface HeaderProps {
   isConnected: boolean;
   onRefresh: () => void;
   user: AppUser;
-  onManualAlert: () => void;
-  onManageUsers: () => void;
   onSignOut: () => void;
 }
 
@@ -19,12 +17,9 @@ export const Header = ({
   isConnected,
   onRefresh,
   user,
-  onManualAlert,
-  onManageUsers,
   onSignOut,
 }: HeaderProps) => {
   const [currentTime, setCurrentTime] = useState(new Date());
-  const isAdmin = user.role === 'Admin';
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -90,19 +85,6 @@ export const Header = ({
             <span className="text-xs font-medium truncate max-w-[140px]">{user.name}</span>
             <span className="text-[10px] text-muted-foreground">{user.role}</span>
           </div>
-
-          {isAdmin && (
-            <>
-              <Button variant="outline" size="sm" onClick={onManualAlert} className="h-8 sm:h-9 px-2 sm:px-3 text-xs">
-                <AlertTriangle className="h-4 w-4 sm:mr-1" />
-                <span className="hidden sm:inline">Manual Alert</span>
-              </Button>
-              <Button variant="outline" size="sm" onClick={onManageUsers} className="h-8 sm:h-9 px-2 sm:px-3 text-xs">
-                <Users className="h-4 w-4 sm:mr-1" />
-                <span className="hidden sm:inline">Users</span>
-              </Button>
-            </>
-          )}
 
           <Button variant="outline" size="icon" onClick={onRefresh} className="h-8 w-8 sm:h-9 sm:w-9">
             <RefreshCw className="h-4 w-4" />

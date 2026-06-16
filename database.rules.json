@@ -13,6 +13,13 @@
           ".validate": "newData.hasChild('status') && newData.hasChild('time')"
         }
       }
+    },
+    "status": {
+      ".read": "auth != null && root.child('floodmonitoring/users').child(auth.uid).child('role').val() === 'Admin' && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
+      "siren": {
+        ".write": "auth != null && root.child('floodmonitoring/users').child(auth.uid).child('role').val() === 'Admin' && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
+        ".validate": "newData.val() === 0 || newData.val() === 1"
+      }
     }
   }
 }

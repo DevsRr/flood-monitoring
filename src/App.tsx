@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
-  createUserWithEmailAndPassword,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
-import { onValue, set, update } from 'firebase/database';
+import { onValue } from 'firebase/database';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { Header } from '@/components/dashboard/Header';
@@ -15,6 +14,7 @@ import { MainChart } from '@/components/dashboard/MainChart';
 import { AlertsPanel } from '@/components/dashboard/AlertsPanel';
 import { StationDetail } from '@/components/dashboard/StationDetail';
 import { ComponentStatusCard } from '@/components/dashboard/ComponentStatusCard';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -26,60 +26,19 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { auth, dbHelpers, userManagementAuth } from '@/lib/firebase';
+import { auth, dbHelpers } from '@/lib/firebase';
 import { useFloodData, type TimeRange } from '@/hooks/useFloodData';
-import type { AppUser, ChartDataPoint, SensorReading } from '@/types/floodData';
+import type { AppUser, SensorReading } from '@/types/floodData';
+import { Activity, AlertTriangle, BarChart3, Droplets, Gauge, ShieldCheck, Waves } from 'lucide-react';
 import './App.css';
 
-type UserFormState = {
-  uid?: string;
-  name: string;
-  email: string;
-  password: string;
-  role: 'Admin' | 'User';
-  disabled: boolean;
-};
-
-const emptyUserForm: UserFormState = {
-  name: '',
-  email: '',
-  password: '',
-  role: 'User',
-  disabled: false,
-};
-
 function App() {
-  const {
-    station,
-    history,
-    alerts,
-    stats,
-    chartData,
-    loading,
-    lastUpdate,
-    isConnected,
-    componentStatus,
-    currentTimeRange,
-    acknowledgeAlert,
-    createManualAlert,
-    setTimeRange,
-  } = useFloodData();
-
-  const [displayData, setDisplayData] = useState<ChartDataPoint[]>([]);
   const [authLoading, setAuthLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState('');
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [manualAlertOpen, setManualAlertOpen] = useState(false);
-  const [userManagementOpen, setUserManagementOpen] = useState(false);
-  const [users, setUsers] = useState<AppUser[]>([]);
-  const [userForm, setUserForm] = useState<UserFormState>(emptyUserForm);
-  const [savingUser, setSavingUser] = useState(false);
-  const shownAlertIds = useRef<Set<string>>(new Set());
-
-  const isAdmin = currentUser?.role === 'Admin';
 
   useEffect(() => {
     let unsubscribeUserProfile: (() => void) | undefined;
@@ -97,7 +56,8 @@ function App() {
       const userRef = dbHelpers.getUserRef(firebaseUser.uid);
       unsubscribeUserProfile = onValue(userRef, async (snapshot) => {
         if (!snapshot.exists()) {
-          setAuthMessage('No dashboard role found for this account.');
+          setAuthMessage('No admin profile found for this account.');
+          setLoginOpen(true);
           setCurrentUser(null);
           await signOut(auth);
           setAuthLoading(false);
@@ -106,7 +66,17 @@ function App() {
 
         const profile = snapshot.val() as Omit<AppUser, 'uid'>;
         if (profile.disabled) {
-          setAuthMessage('Account Disabled');
+          setAuthMessage('Account disabled.');
+          setLoginOpen(true);
+          setCurrentUser(null);
+          await signOut(auth);
+          setAuthLoading(false);
+          return;
+        }
+
+        if (profile.role !== 'Admin') {
+          setAuthMessage('Admin access only.');
+          setLoginOpen(true);
           setCurrentUser(null);
           await signOut(auth);
           setAuthLoading(false);
@@ -121,6 +91,7 @@ function App() {
           disabled: false,
         });
         setAuthMessage('');
+        setLoginOpen(false);
         setAuthLoading(false);
       });
     });
@@ -130,60 +101,6 @@ function App() {
       unsubscribe();
     };
   }, []);
-
-  useEffect(() => {
-    if (!isAdmin) {
-      setUsers([]);
-      return;
-    }
-
-    const usersRef = dbHelpers.getUsersRef();
-    const unsubscribe = onValue(usersRef, (snapshot) => {
-      const rawUsers = snapshot.val() as Record<string, Omit<AppUser, 'uid'>> | null;
-      const nextUsers = Object.entries(rawUsers ?? {}).map(([uid, profile]) => ({
-        uid,
-        name: profile.name,
-        email: profile.email,
-        role: profile.role,
-        disabled: profile.disabled === true,
-      }));
-
-      setUsers(nextUsers.sort((a, b) => a.name.localeCompare(b.name)));
-    });
-
-    return () => unsubscribe();
-  }, [isAdmin]);
-
-  useEffect(() => {
-    if (chartData.length > 0) {
-      setDisplayData(chartData);
-    }
-  }, [chartData]);
-
-  useEffect(() => {
-    alerts
-      .filter((alert) => alert.type === 'flood_warning' && !alert.acknowledged && alert.severity === 'critical')
-      .forEach((alert) => {
-        if (shownAlertIds.current.has(alert.id)) return;
-        shownAlertIds.current.add(alert.id);
-
-        toast.error(alert.message, {
-          description: new Date(alert.timestamp).toLocaleString([], {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-          duration: 10000,
-          action: isAdmin
-            ? {
-                label: 'Acknowledge',
-                onClick: () => handleAcknowledge(alert.id),
-              }
-            : undefined,
-        });
-      });
-  }, [alerts, isAdmin]);
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -200,89 +117,6 @@ function App() {
   const handleSignOut = async () => {
     await signOut(auth);
     setCurrentUser(null);
-    shownAlertIds.current.clear();
-  };
-
-  const handleRefresh = () => {
-    toast.info('Refreshing data...');
-    setDisplayData([...chartData]);
-  };
-
-  const handleTimeRangeChange = useCallback((range: TimeRange) => {
-    setTimeRange(range);
-  }, [setTimeRange]);
-
-  const handleAcknowledge = useCallback(async (alertId: string) => {
-    if (!isAdmin || !currentUser) return;
-    await acknowledgeAlert(alertId, currentUser.email);
-    toast.success('Alert acknowledged.');
-  }, [acknowledgeAlert, currentUser, isAdmin]);
-
-  const handleManualAlert = async () => {
-    if (!currentUser) return;
-    await createManualAlert(currentUser.email);
-    setManualAlertOpen(false);
-    toast.success('Manual alert added to history.');
-  };
-
-  const resetUserForm = () => {
-    setUserForm(emptyUserForm);
-  };
-
-  const editUser = (user: AppUser) => {
-    setUserForm({
-      uid: user.uid,
-      name: user.name,
-      email: user.email,
-      password: '',
-      role: user.role,
-      disabled: user.disabled,
-    });
-  };
-
-  const saveUser = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!isAdmin) return;
-
-    setSavingUser(true);
-    try {
-      if (userForm.uid) {
-        await update(dbHelpers.getUserRef(userForm.uid), {
-          name: userForm.name.trim(),
-          email: userForm.email.trim(),
-          role: userForm.role,
-          disabled: userForm.disabled,
-        });
-        toast.success('User updated.');
-      } else {
-        const credential = await createUserWithEmailAndPassword(
-          userManagementAuth,
-          userForm.email.trim(),
-          userForm.password
-        );
-
-        await set(dbHelpers.getUserRef(credential.user.uid), {
-          name: userForm.name.trim(),
-          email: userForm.email.trim(),
-          role: userForm.role,
-          disabled: userForm.disabled,
-        });
-        await signOut(userManagementAuth);
-        toast.success('User added.');
-      }
-
-      resetUserForm();
-    } catch {
-      toast.error('Unable to save user. Check the fields and Firebase permissions.');
-    } finally {
-      setSavingUser(false);
-    }
-  };
-
-  const disableUser = async (user: AppUser) => {
-    if (!isAdmin) return;
-    await update(dbHelpers.getUserRef(user.uid), { disabled: true });
-    toast.success('User disabled.');
   };
 
   if (authLoading) {
@@ -296,21 +130,100 @@ function App() {
     );
   }
 
-  if (!currentUser) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Toaster position="top-right" richColors />
-        <LoginModal
-          email={loginEmail}
-          password={loginPassword}
-          message={authMessage}
-          onEmailChange={setLoginEmail}
-          onPasswordChange={setLoginPassword}
-          onSubmit={handleLogin}
-        />
-      </div>
-    );
-  }
+  return (
+    <div className="min-h-screen bg-background">
+      <Toaster position="top-right" richColors />
+
+      {currentUser ? (
+        <Dashboard user={currentUser} onSignOut={handleSignOut} />
+      ) : (
+        <PublicLanding onLogin={() => setLoginOpen(true)} />
+      )}
+
+      <LoginModal
+        open={loginOpen && !currentUser}
+        email={loginEmail}
+        password={loginPassword}
+        message={authMessage}
+        onOpenChange={setLoginOpen}
+        onEmailChange={setLoginEmail}
+        onPasswordChange={setLoginPassword}
+        onSubmit={handleLogin}
+      />
+    </div>
+  );
+}
+
+interface DashboardProps {
+  user: AppUser;
+  onSignOut: () => Promise<void>;
+}
+
+const Dashboard = ({ user, onSignOut }: DashboardProps) => {
+  const {
+    station,
+    history,
+    alerts,
+    stats,
+    chartData,
+    loading,
+    lastUpdate,
+    isConnected,
+    componentStatus,
+    sirenOn,
+    sirenLastUpdate,
+    currentTimeRange,
+    acknowledgeAlert,
+    updateSirenStatus,
+    setTimeRange,
+  } = useFloodData();
+
+  const shownAlertIds = useRef<Set<string>>(new Set());
+
+  const handleAcknowledge = useCallback(async (alertId: string) => {
+    await acknowledgeAlert(alertId, user.email);
+    toast.success('Alert acknowledged.');
+  }, [acknowledgeAlert, user.email]);
+
+  useEffect(() => {
+    alerts
+      .filter((alert) => alert.type === 'flood_warning' && !alert.acknowledged && alert.severity === 'critical')
+      .forEach((alert) => {
+        if (shownAlertIds.current.has(alert.id)) return;
+        shownAlertIds.current.add(alert.id);
+
+        toast.error(alert.message, {
+          description: new Date(alert.timestamp).toLocaleString([], {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          duration: 10000,
+          action: {
+            label: 'Acknowledge',
+            onClick: () => handleAcknowledge(alert.id),
+          },
+        });
+      });
+  }, [alerts, handleAcknowledge]);
+
+  const handleRefresh = () => {
+    toast.info('Refreshing data...');
+  };
+
+  const handleTimeRangeChange = useCallback((range: TimeRange) => {
+    setTimeRange(range);
+  }, [setTimeRange]);
+
+  const handleSirenToggle = async (enabled: boolean) => {
+    try {
+      await updateSirenStatus(enabled);
+      toast.success(`Siren turned ${enabled ? 'on' : 'off'}.`);
+    } catch {
+      toast.error('Unable to update siren status.');
+    }
+  };
 
   if (loading) {
     return (
@@ -324,17 +237,13 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Toaster position="top-right" richColors />
-
+    <>
       <Header
         lastUpdate={lastUpdate}
         isConnected={isConnected}
         onRefresh={handleRefresh}
-        user={currentUser}
-        onManualAlert={() => setManualAlertOpen(true)}
-        onManageUsers={() => setUserManagementOpen(true)}
-        onSignOut={handleSignOut}
+        user={user}
+        onSignOut={onSignOut}
       />
 
       <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
@@ -347,13 +256,20 @@ function App() {
         </section>
 
         <section className="mb-4 sm:mb-6">
-          <ComponentStatusCard status={componentStatus} />
+          <ComponentStatusCard
+            status={componentStatus}
+            currentReading={station?.currentReading}
+            lastUpdate={lastUpdate}
+            sirenOn={sirenOn}
+            sirenLastUpdate={sirenLastUpdate}
+            onSirenToggle={handleSirenToggle}
+          />
         </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6 mb-4 sm:mb-6">
           <div className="lg:col-span-2">
             <MainChart
-              data={displayData}
+              data={chartData}
               onTimeRangeChange={handleTimeRangeChange}
               currentRange={currentTimeRange}
             />
@@ -362,7 +278,7 @@ function App() {
           <div className="lg:col-span-1">
             <AlertsPanel
               alerts={alerts}
-              canAcknowledge={isAdmin}
+              canAcknowledge
               onAcknowledge={handleAcknowledge}
             />
           </div>
@@ -372,7 +288,7 @@ function App() {
           <section className="mb-4 sm:mb-6">
             <StationDetail
               station={station}
-              history={displayData}
+              history={chartData}
             />
           </section>
         )}
@@ -395,52 +311,134 @@ function App() {
           </div>
         </footer>
       </main>
-
-      <ManualAlertDialog
-        open={manualAlertOpen}
-        onOpenChange={setManualAlertOpen}
-        onConfirm={handleManualAlert}
-      />
-
-      <UserManagementDialog
-        open={userManagementOpen}
-        users={users}
-        form={userForm}
-        saving={savingUser}
-        onOpenChange={setUserManagementOpen}
-        onChange={setUserForm}
-        onReset={resetUserForm}
-        onEdit={editUser}
-        onDisable={disableUser}
-        onSave={saveUser}
-      />
-    </div>
+    </>
   );
+};
+
+interface PublicLandingProps {
+  onLogin: () => void;
 }
 
+const PublicLanding = ({ onLogin }: PublicLandingProps) => {
+  const publicFeatures = [
+    { title: 'Project Overview', text: 'A real-time flood monitoring system designed for fast situational awareness.', icon: Waves },
+    { title: 'Flood Information', text: 'Track water-level conditions and understand how alerts support community safety.', icon: AlertTriangle },
+    { title: 'Dashboard Overview', text: 'Admins can review charts, alert history, and protected device status after login.', icon: BarChart3 },
+    { title: 'System Description', text: 'ESP32 sensor readings are sent to Firebase and visualized in a responsive dashboard.', icon: Gauge },
+  ];
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto flex min-h-14 sm:min-h-16 items-center justify-between gap-3 px-3 sm:px-4">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="bg-gradient-to-br from-blue-500 to-cyan-400 p-1.5 sm:p-2 rounded-lg shrink-0">
+              <Droplets className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-sm sm:text-lg font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent truncate">
+                FloodMonitor
+              </h1>
+              <p className="hidden sm:block text-[10px] text-muted-foreground">Flood Monitoring System</p>
+            </div>
+          </div>
+
+          <Button size="sm" onClick={onLogin} className="h-8 sm:h-9 px-3 text-xs">
+            Admin Login
+          </Button>
+        </div>
+      </header>
+
+      <main>
+        <section className="container mx-auto px-3 sm:px-4 py-10 sm:py-14">
+          <div className="max-w-3xl">
+            <Badge variant="outline" className="mb-4 bg-cyan-500/10 text-cyan-600 border-cyan-500/20">
+              Public Information
+            </Badge>
+            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight">
+              Community flood monitoring with real-time dashboard support.
+            </h2>
+            <p className="mt-4 text-sm sm:text-base text-muted-foreground max-w-2xl">
+              FloodMonitor helps present water-level information, system purpose, dashboard summaries, and public-facing safety context in one responsive web experience.
+            </p>
+          </div>
+        </section>
+
+        <section className="border-y bg-muted/30">
+          <div className="container mx-auto px-3 sm:px-4 py-8 sm:py-10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {publicFeatures.map((feature) => {
+                const Icon = feature.icon;
+
+                return (
+                  <div key={feature.title} className="rounded-lg border bg-card p-4 hover:shadow-md transition-all duration-300">
+                    <div className="mb-3 inline-flex rounded-md bg-blue-500/10 p-2 text-blue-600">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <h3 className="text-sm font-semibold">{feature.title}</h3>
+                    <p className="mt-2 text-xs text-muted-foreground leading-relaxed">{feature.text}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section className="container mx-auto px-3 sm:px-4 py-8 sm:py-10">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="rounded-lg border bg-card p-4 lg:col-span-2">
+              <div className="flex items-center gap-2 mb-2">
+                <Activity className="h-4 w-4 text-emerald-600" />
+                <h3 className="text-sm font-semibold">Features Section</h3>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                The system supports flood status tracking, historical charts, alert review, and protected monitoring tools for authorized administrators.
+              </p>
+            </div>
+
+            <div className="rounded-lg border bg-card p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <ShieldCheck className="h-4 w-4 text-cyan-600" />
+                <h3 className="text-sm font-semibold">Protected Monitoring</h3>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Component status, device status, sensor readings, and controls are hidden from public users.
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+};
+
 interface LoginModalProps {
+  open: boolean;
   email: string;
   password: string;
   message: string;
+  onOpenChange: (open: boolean) => void;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
 
 const LoginModal = ({
+  open,
   email,
   password,
   message,
+  onOpenChange,
   onEmailChange,
   onPasswordChange,
   onSubmit,
 }: LoginModalProps) => (
-  <Dialog open>
-    <DialogContent showCloseButton={false} className="sm:max-w-md">
+  <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent className="sm:max-w-md">
       <form onSubmit={onSubmit} className="space-y-4">
         <DialogHeader>
-          <DialogTitle>FloodMonitor Login</DialogTitle>
-          <DialogDescription>Sign in to view the flood monitoring dashboard.</DialogDescription>
+          <DialogTitle>Admin Login</DialogTitle>
+          <DialogDescription>Sign in with an Admin account to open the monitoring dashboard.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
@@ -477,161 +475,6 @@ const LoginModal = ({
           <Button type="submit" className="w-full">Login</Button>
         </DialogFooter>
       </form>
-    </DialogContent>
-  </Dialog>
-);
-
-interface ManualAlertDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: () => Promise<void>;
-}
-
-const ManualAlertDialog = ({ open, onOpenChange, onConfirm }: ManualAlertDialogProps) => (
-  <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>Create Manual Alert</DialogTitle>
-        <DialogDescription>
-          This writes a HIGH manual alert into the existing history records.
-        </DialogDescription>
-      </DialogHeader>
-      <DialogFooter>
-        <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-        <Button onClick={onConfirm}>Create Alert</Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-);
-
-interface UserManagementDialogProps {
-  open: boolean;
-  users: AppUser[];
-  form: UserFormState;
-  saving: boolean;
-  onOpenChange: (open: boolean) => void;
-  onChange: (form: UserFormState) => void;
-  onReset: () => void;
-  onEdit: (user: AppUser) => void;
-  onDisable: (user: AppUser) => Promise<void>;
-  onSave: (event: FormEvent<HTMLFormElement>) => void;
-}
-
-const UserManagementDialog = ({
-  open,
-  users,
-  form,
-  saving,
-  onOpenChange,
-  onChange,
-  onReset,
-  onEdit,
-  onDisable,
-  onSave,
-}: UserManagementDialogProps) => (
-  <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="sm:max-w-3xl">
-      <DialogHeader>
-        <DialogTitle>User Management</DialogTitle>
-        <DialogDescription>Add, edit, or disable dashboard users.</DialogDescription>
-      </DialogHeader>
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-4">
-        <form onSubmit={onSave} className="space-y-3 rounded-lg border p-3">
-          <div className="space-y-2">
-            <Label htmlFor="user-name">Name</Label>
-            <Input
-              id="user-name"
-              value={form.name}
-              onChange={(event) => onChange({ ...form, name: event.target.value })}
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="user-email">Email</Label>
-            <Input
-              id="user-email"
-              type="email"
-              value={form.email}
-              onChange={(event) => onChange({ ...form, email: event.target.value })}
-              required
-            />
-          </div>
-
-          {!form.uid && (
-            <div className="space-y-2">
-              <Label htmlFor="user-password">Password</Label>
-              <Input
-                id="user-password"
-                type="password"
-                value={form.password}
-                onChange={(event) => onChange({ ...form, password: event.target.value })}
-                minLength={6}
-                required
-              />
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="user-role">Role</Label>
-              <select
-                id="user-role"
-                value={form.role}
-                onChange={(event) => onChange({ ...form, role: event.target.value as 'Admin' | 'User' })}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="Admin">Admin</option>
-                <option value="User">User</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="user-disabled">Status</Label>
-              <select
-                id="user-disabled"
-                value={form.disabled ? 'disabled' : 'active'}
-                onChange={(event) => onChange({ ...form, disabled: event.target.value === 'disabled' })}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="active">Active</option>
-                <option value="disabled">Disabled</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <Button type="submit" disabled={saving} className="flex-1">
-              {form.uid ? 'Update User' : 'Add User'}
-            </Button>
-            <Button type="button" variant="outline" onClick={onReset}>Clear</Button>
-          </div>
-        </form>
-
-        <ScrollArea className="h-[360px] rounded-lg border">
-          <div className="divide-y">
-            {users.map((user) => (
-              <div key={user.uid} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{user.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                  <p className="text-[10px] text-muted-foreground">{user.role} · {user.disabled ? 'Disabled' : 'Active'}</p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <Button type="button" variant="outline" size="sm" onClick={() => onEdit(user)}>Edit</Button>
-                  <Button type="button" variant="outline" size="sm" disabled={user.disabled} onClick={() => onDisable(user)}>
-                    Disable
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {users.length === 0 && (
-              <p className="p-4 text-sm text-muted-foreground">No users found.</p>
-            )}
-          </div>
-        </ScrollArea>
-      </div>
     </DialogContent>
   </Dialog>
 );

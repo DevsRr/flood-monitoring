@@ -26,6 +26,28 @@ interface StationDetailProps {
   history: ChartDataPoint[];
 }
 
+type TooltipPayload = { value?: number | string };
+
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  label?: string;
+}
+
+const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-background border rounded-lg p-2 sm:p-3 shadow-lg text-xs sm:text-sm">
+        <p className="font-semibold mb-1">{label}</p>
+        <p style={{ color: '#3b82f6' }}>
+          Water Level: {payload[0].value} cm
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'normal':
@@ -62,20 +84,6 @@ export const StationDetail = ({ station, history }: StationDetailProps) => {
   const minWaterLevel = waterLevels.length > 0
     ? Math.min(...waterLevels).toFixed(2)
     : '--';
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-background border rounded-lg p-2 sm:p-3 shadow-lg text-xs sm:text-sm">
-          <p className="font-semibold mb-1">{label}</p>
-          <p style={{ color: '#3b82f6' }}>
-            Water Level: {payload[0].value} cm
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <Card className="h-full">

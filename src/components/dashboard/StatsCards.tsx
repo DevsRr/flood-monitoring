@@ -50,6 +50,7 @@ export const StatsCards = ({ stats, currentReading, componentStatus }: StatsCard
     componentStatus.orangeLedOnline,
     componentStatus.greenLedOnline,
     componentStatus.ultrasonicOnline,
+    componentStatus.sirenOn,
   ].filter(Boolean).length;
 
   const cards = [
@@ -106,7 +107,7 @@ export const StatsCards = ({ stats, currentReading, componentStatus }: StatsCard
     },
     {
       title: 'Component Status',
-      value: `${onlineComponents}/4`,
+      value: `${onlineComponents}/5`,
       icon: Cpu,
       color: componentStatus.ultrasonicOnline
         ? 'text-teal-500 bg-teal-500/10 border-teal-500/20'

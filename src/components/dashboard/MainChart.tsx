@@ -23,6 +23,21 @@ interface MainChartProps {
 }
 
 type ChartType = 'area' | 'line';
+type TooltipPayload = { value?: number | string };
+
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  label?: string;
+}
+
+interface XTickProps {
+  x?: number;
+  y?: number;
+  payload?: {
+    value?: string;
+  };
+}
 
 const WARN_LEVEL = 15.24;  
 const CRIT_LEVEL = 22.86;  
@@ -36,7 +51,7 @@ const timeRanges: { value: TimeRange; label: string }[] = [
   { value: '1y',  label: '1Y'  },
 ];
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-background border rounded-lg p-2 sm:p-3 shadow-lg text-xs sm:text-sm min-w-[140px]">
@@ -50,6 +65,26 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+const CustomXTick = ({ x = 0, y = 0, payload }: XTickProps) => {
+  const value = payload?.value ?? '';
+  const timeMatch = value.match(/(\d{1,2}:\d{2})$/);
+  const timePart = timeMatch ? timeMatch[1] : '';
+  const datePart = timePart ? value.slice(0, value.lastIndexOf(timePart)).replace(/,?\s*$/, '').trim() : value;
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={12} textAnchor="middle" fill="#6b7280" fontSize={9} fontWeight={500}>
+        {datePart}
+      </text>
+      {timePart && (
+        <text x={0} y={0} dy={24} textAnchor="middle" fill="#9ca3af" fontSize={9}>
+          {timePart}
+        </text>
+      )}
+    </g>
+  );
+};
+
 export const MainChart = ({ data, onTimeRangeChange, currentRange = '24h' }: MainChartProps) => {
   const [chartType, setChartType] = useState<ChartType>('area');
 
@@ -59,25 +94,6 @@ export const MainChart = ({ data, onTimeRangeChange, currentRange = '24h' }: Mai
   );
 
   const chartMargin = { top: 10, right: 60, left: 10, bottom: 70 };
-
-  const CustomXTick = ({ x, y, payload }: any) => {
-    const value: string = payload?.value ?? '';
-    const timeMatch = value.match(/(\d{1,2}:\d{2})$/);
-    const timePart = timeMatch ? timeMatch[1] : '';
-    const datePart = timePart ? value.slice(0, value.lastIndexOf(timePart)).replace(/,?\s*$/, '').trim() : value;
-    return (
-      <g transform={`translate(${x},${y})`}>
-        <text x={0} y={0} dy={12} textAnchor="middle" fill="#6b7280" fontSize={9} fontWeight={500}>
-          {datePart}
-        </text>
-        {timePart && (
-          <text x={0} y={0} dy={24} textAnchor="middle" fill="#9ca3af" fontSize={9}>
-            {timePart}
-          </text>
-        )}
-      </g>
-    );
-  };
 
   const xAxis = (
     <XAxis

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { onValue, push, set, update } from 'firebase/database';
+import { onValue, set, update } from 'firebase/database';
 import { database, dbHelpers, ref } from '@/lib/firebase';
 import type {
   Alert,
@@ -207,6 +207,7 @@ const getComponentStatus = (
     orangeLedOnline: reading?.status === 'moderate',
     greenLedOnline: reading?.status === 'normal',
     ultrasonicOnline: Boolean(reading?.waterLevel !== undefined && isConnected && updatedRecently),
+    sirenOn: false,
   };
 };
 
@@ -234,7 +235,10 @@ export const useFloodData = () => {
     orangeLedOnline: false,
     greenLedOnline: false,
     ultrasonicOnline: false,
+    sirenOn: false,
   });
+  const [sirenOn, setSirenOn] = useState(false);
+  const [sirenLastUpdate, setSirenLastUpdate] = useState<Date>(new Date(0));
 
   useEffect(() => {
     const currentRef = dbHelpers.getCurrentRef();
@@ -267,7 +271,10 @@ export const useFloodData = () => {
         setLastUpdate(updateTime);
         setIsConnected(true);
         setLoading(false);
-        setComponentStatus(getComponentStatus(reading, true, updateTime));
+        setComponentStatus((previous) => ({
+          ...getComponentStatus(reading, true, updateTime),
+          sirenOn: previous.sirenOn,
+        }));
 
         setStats((previous) => ({
           ...previous,
@@ -283,6 +290,28 @@ export const useFloodData = () => {
       () => {
         setIsConnected(false);
         setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const sirenRef = dbHelpers.getSirenRef();
+
+    const unsubscribe = onValue(
+      sirenRef,
+      (snapshot) => {
+        const nextSirenOn = snapshot.val() === 1;
+        setSirenOn(nextSirenOn);
+        setSirenLastUpdate(new Date());
+        setComponentStatus((previous) => ({
+          ...previous,
+          sirenOn: nextSirenOn,
+        }));
+      },
+      () => {
+        setSirenLastUpdate(new Date(0));
       }
     );
 
@@ -374,20 +403,9 @@ export const useFloodData = () => {
     });
   }, [alerts]);
 
-  const createManualAlert = useCallback(async (createdBy: string) => {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const key = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
-
-  await set(ref(database, `floodmonitoring/history/${key}`), {
-    status: 'HIGH',
-    waterLevel: 0,
-    source: 'MANUAL',
-    createdBy,
-    time: now.toISOString(),
-    acknowledged: false,
-  });
-}, []);
+  const updateSirenStatus = useCallback(async (enabled: boolean) => {
+    await set(ref(database, 'status/siren'), enabled ? 1 : 0);
+  }, []);
 
   const setTimeRange = useCallback((range: TimeRange) => {
     setCurrentTimeRange(range);
@@ -408,9 +426,11 @@ export const useFloodData = () => {
     lastUpdate,
     isConnected,
     componentStatus,
+    sirenOn,
+    sirenLastUpdate,
     currentTimeRange,
     acknowledgeAlert,
-    createManualAlert,
+    updateSirenStatus,
     setTimeRange,
     getHistoryByTimeRange,
   };

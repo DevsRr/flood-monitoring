@@ -58,6 +58,7 @@ export interface ComponentStatus {
   orangeLedOnline: boolean;
   greenLedOnline: boolean;
   ultrasonicOnline: boolean;
+  sirenOn: boolean;
 }
 
 export interface AppUser {
