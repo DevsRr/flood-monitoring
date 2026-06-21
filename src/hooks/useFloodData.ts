@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { onValue, set, update } from 'firebase/database';
-import { database, dbHelpers, ref } from '@/lib/firebase';
+import { dbHelpers } from '@/lib/firebase';
 import type {
   Alert,
   ChartDataPoint,
@@ -13,7 +13,7 @@ import type {
 const STATION_CONFIG = {
   id: 'flood-monitor',
   name: 'Main Monitoring Station',
-  location: 'River Bank Monitoring Point',
+  location: 'Baranggay Caroyroyan, Pili, Camirines Sur',
   lat: 14.5995,
   lng: 120.9842,
 };
@@ -240,6 +240,8 @@ export const useFloodData = (listenToSensors = false) => {
   const [sirenOn, setSirenOn] = useState(false);
   const [sirenLastUpdate, setSirenLastUpdate] = useState<Date>(new Date(0));
   const [sensorLastUpdate, setSensorLastUpdate] = useState<Date>(new Date(0));
+  const [manualSirenOn, setManualSirenOn] = useState(false);
+  const [manualSirenLastUpdate, setManualSirenLastUpdate] = useState<Date>(new Date(0));
 
   useEffect(() => {
     const currentRef = dbHelpers.getCurrentRef();
@@ -332,6 +334,30 @@ export const useFloodData = (listenToSensors = false) => {
   }, [listenToSensors]);
 
   useEffect(() => {
+    if (!listenToSensors) {
+      setManualSirenOn(false);
+      setManualSirenLastUpdate(new Date(0));
+      return;
+    }
+
+    const manualSirenRef = dbHelpers.getManualSirenRef();
+
+    const unsubscribe = onValue(
+      manualSirenRef,
+      (snapshot) => {
+        const value = snapshot.val();
+        setManualSirenOn(value === 1);
+        setManualSirenLastUpdate(new Date());
+      },
+      () => {
+        setManualSirenLastUpdate(new Date(0));
+      }
+    );
+
+    return () => unsubscribe();
+  }, [listenToSensors]);
+
+  useEffect(() => {
     const historyRef = dbHelpers.getHistoryRef(500);
 
     const unsubscribe = onValue(
@@ -406,7 +432,7 @@ export const useFloodData = (listenToSensors = false) => {
   }, [alerts]);
 
   const updateSirenStatus = useCallback(async (enabled: boolean) => {
-    await set(ref(database, 'floodmonitoring/sensors/siren'), enabled ? 1 : 0);
+    await set(dbHelpers.getManualSirenRef(), enabled ? 1 : 0);
   }, []);
 
   const setTimeRange = useCallback((range: TimeRange) => {
@@ -431,6 +457,8 @@ export const useFloodData = (listenToSensors = false) => {
     sirenOn,
     sirenLastUpdate,
     sensorLastUpdate,
+    manualSirenOn,
+    manualSirenLastUpdate,
     currentTimeRange,
     acknowledgeAlert,
     updateSirenStatus,

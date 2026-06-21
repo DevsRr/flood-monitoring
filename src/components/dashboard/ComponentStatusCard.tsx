@@ -2,14 +2,14 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Circle, Radar, Siren } from 'lucide-react';
-import type { ComponentStatus, SensorReading } from '@/types/floodData';
+import type { ComponentStatus } from '@/types/floodData';
 
 interface ComponentStatusCardProps {
   status: ComponentStatus;
-  currentReading?: SensorReading | null;
   lastUpdate: Date;
-  sirenOn: boolean;
   sirenLastUpdate: Date;
+  manualSirenOn: boolean;
+  manualSirenLastUpdate: Date;
   onSirenToggle: (enabled: boolean) => Promise<void>;
 }
 
@@ -40,10 +40,10 @@ const StatusBadge = ({ online, color }: { online: boolean; color?: 'green' | 'or
 
 export const ComponentStatusCard = ({
   status,
-  currentReading,
   lastUpdate,
-  sirenOn,
   sirenLastUpdate,
+  manualSirenOn,
+  manualSirenLastUpdate,
   onSirenToggle,
 }: ComponentStatusCardProps) => {
   const cards = [
@@ -52,7 +52,6 @@ export const ComponentStatusCard = ({
       online: status.redLedOnline,
       color: 'red' as const,
       icon: Circle,
-      detail: status.redLedOnline ? 'Critical or high level active' : 'No high-level trigger',
       timestamp: lastUpdate,
     },
     {
@@ -60,7 +59,6 @@ export const ComponentStatusCard = ({
       online: status.orangeLedOnline,
       color: 'orange' as const,
       icon: Circle,
-      detail: status.orangeLedOnline ? 'Medium level active' : 'No medium-level trigger',
       timestamp: lastUpdate,
     },
     {
@@ -68,7 +66,6 @@ export const ComponentStatusCard = ({
       online: status.greenLedOnline,
       color: 'green' as const,
       icon: Circle,
-      detail: status.greenLedOnline ? 'Normal level active' : 'Normal indicator inactive',
       timestamp: lastUpdate,
     },
     {
@@ -76,8 +73,14 @@ export const ComponentStatusCard = ({
       online: status.ultrasonicOnline,
       color: 'cyan' as const,
       icon: Radar,
-      detail: `Distance: ${currentReading?.waterLevel !== undefined ? `${currentReading.waterLevel.toFixed(2)} cm` : 'Last known unavailable'}`,
       timestamp: lastUpdate,
+    },
+    {
+      title: 'Siren Status',
+      online: status.sirenOn,
+      color: 'red' as const,
+      icon: Siren,
+      timestamp: sirenLastUpdate,
     },
   ];
 
@@ -85,46 +88,47 @@ export const ComponentStatusCard = ({
     <section className="space-y-3">
       <div>
         <h2 className="text-sm sm:text-base font-semibold">Component Status</h2>
-        <p className="text-[10px] sm:text-xs text-muted-foreground">Admin-only device monitoring and siren override</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
         {cards.map((card) => {
           const Icon = card.icon;
 
           return (
-            <Card key={card.title} className={`${getBadgeClass(card.online, card.color)} border-2 hover:shadow-md transition-all duration-300`}>
+            <Card
+              key={card.title}
+              className={`${getBadgeClass(true, card.color)} border-2 hover:shadow-md transition-all duration-300 ${card.online ? '' : 'opacity-50'}`}
+            >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 p-3">
                 <CardTitle className="text-xs font-medium truncate">{card.title}</CardTitle>
                 <div className="p-1.5 rounded-md bg-white/50 shrink-0">
-                  <Icon className={`h-4 w-4 ${card.online ? '' : 'text-slate-400'}`} />
+                  <Icon className="h-4 w-4" />
                 </div>
               </CardHeader>
               <CardContent className="p-3 pt-0 space-y-2">
                 <StatusBadge online={card.online} color={card.color} />
-                <p className="text-xs font-medium min-h-8">{card.detail}</p>
                 <p className="text-[10px] opacity-70">Updated: {formatTimestamp(card.timestamp)}</p>
               </CardContent>
             </Card>
           );
         })}
 
-        <Card className={`${sirenOn ? getBadgeClass(true, 'red') : getBadgeClass(false)} border-2 hover:shadow-md transition-all duration-300`}>
+        <Card className={`${manualSirenOn ? getBadgeClass(true, 'red') : getBadgeClass(false)} border-2 hover:shadow-md transition-all duration-300`}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 p-3">
-            <CardTitle className="text-xs font-medium truncate">Siren Control</CardTitle>
+            <CardTitle className="text-xs font-medium truncate">Manual Override</CardTitle>
             <div className="p-1.5 rounded-md bg-white/50 shrink-0">
               <Siren className="h-4 w-4" />
             </div>
           </CardHeader>
           <CardContent className="p-3 pt-0 space-y-2">
-            <Badge variant="outline" className={`text-[10px] h-5 px-1.5 ${sirenOn ? getBadgeClass(true, 'red') : getBadgeClass(false)}`}>
-              {sirenOn ? 'ON' : 'OFF'}
+            <Badge variant="outline" className={`text-[10px] h-5 px-1.5 ${manualSirenOn ? getBadgeClass(true, 'red') : getBadgeClass(false)}`}>
+              {manualSirenOn ? 'ON' : 'OFF'}
             </Badge>
             <div className="flex items-center justify-between gap-3 rounded-md border bg-background/60 px-3 py-2">
-              <span className="text-xs font-medium">Manual Override</span>
-              <Switch checked={sirenOn} onCheckedChange={onSirenToggle} />
+              <span className="text-xs font-medium">Manual Mode</span>
+              <Switch checked={manualSirenOn} onCheckedChange={onSirenToggle} />
             </div>
-            <p className="text-[10px] opacity-70">Updated: {formatTimestamp(sirenLastUpdate)}</p>
+            <p className="text-[10px] opacity-70">Updated: {formatTimestamp(manualSirenLastUpdate)}</p>
           </CardContent>
         </Card>
       </div>

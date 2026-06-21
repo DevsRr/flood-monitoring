@@ -22,6 +22,7 @@ export const DB_PATHS = {
   CURRENT: 'floodmonitoring',
   CURRENT_STATUS: 'floodmonitoring/currentStatus',
   SENSORS: 'floodmonitoring/sensors',
+  MANUAL: 'floodmonitoring/manual',
   HISTORY: 'floodmonitoring/history',
   USERS: 'floodmonitoring/users',
 } as const;
@@ -52,6 +53,10 @@ export const dbHelpers = {
 
   getSensorsRef: () => {
     return ref(database, DB_PATHS.SENSORS);
+  },
+
+  getManualSirenRef: () => {
+    return ref(database, `${DB_PATHS.MANUAL}/siren`);
   },
 };
 

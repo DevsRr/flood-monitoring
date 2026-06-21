@@ -170,9 +170,10 @@ const Dashboard = ({ user, onLogin, onSignOut }: DashboardProps) => {
     lastUpdate,
     isConnected,
     componentStatus,
-    sirenOn,
     sirenLastUpdate,
     sensorLastUpdate,
+    manualSirenOn,
+    manualSirenLastUpdate,
     currentTimeRange,
     acknowledgeAlert,
     updateSirenStatus,
@@ -264,10 +265,10 @@ const Dashboard = ({ user, onLogin, onSignOut }: DashboardProps) => {
           <section className="mb-4 sm:mb-6">
             <ComponentStatusCard
               status={componentStatus}
-              currentReading={station?.currentReading}
               lastUpdate={sensorLastUpdate}
-              sirenOn={sirenOn}
               sirenLastUpdate={sirenLastUpdate}
+              manualSirenOn={manualSirenOn}
+              manualSirenLastUpdate={manualSirenLastUpdate}
               onSirenToggle={handleSirenToggle}
             />
           </section>
