@@ -13,7 +13,7 @@ import type {
 const STATION_CONFIG = {
   id: 'flood-monitor',
   name: 'Main Monitoring Station',
-  location: 'Baranggay Caroyroyan, Pili, Camirines Sur',
+  location: 'Baranggay Caroyroyan, Pili, Camirines Sur.',
   lat: 14.5995,
   lng: 120.9842,
 };
