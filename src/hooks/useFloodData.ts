@@ -246,6 +246,8 @@ export const useFloodData = (listenToSensors = false) => {
   const [station, setStation] = useState<StationData | null>(null);
   const [history, setHistory] = useState<SensorReading[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [warningReadings, setWarningReadings] = useState<SensorReading[]>([]);
+  const [criticalReadings, setCriticalReadings] = useState<SensorReading[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     totalStations: 1,
     activeStations: 0,
@@ -382,7 +384,6 @@ export const useFloodData = (listenToSensors = false) => {
       (snapshot) => {
         if (!snapshot.exists()) {
           setHistory([]);
-          setAlerts([]);
           setLoading(false);
           return;
         }
@@ -405,14 +406,6 @@ export const useFloodData = (listenToSensors = false) => {
           history: readings,
         }));
 
-        const historyAlerts = readings
-          .filter((reading) => ['moderate', 'warning', 'critical'].includes(reading.status))
-          .slice(-10)
-          .map(generateAlert)
-          .filter((alert): alert is Alert => alert !== null);
-
-        setAlerts(historyAlerts);
-
         const levels = readings.map((reading) => reading.waterLevel);
         if (levels.length > 0) {
           const max = Math.max(...levels);
@@ -433,6 +426,54 @@ export const useFloodData = (listenToSensors = false) => {
 
     return () => unsubscribe();
   }, []);
+
+  // Alerts are queried directly by status (WARNING/CRITICAL) via an indexed
+  // query, independent of the recency-limited history window above. This
+  // guarantees older or seeded flood events still surface even when
+  // frequent live SAFE readings would otherwise crowd them out of a
+  // "last N records" query.
+  useEffect(() => {
+    const toReadings = (raw: Record<string, Esp32HistoryEntry> | null): SensorReading[] => {
+      if (!raw) return [];
+      return Object.entries(raw)
+        .map(([key, entry]) => {
+          const timestamp = keyToTimestamp(key, entry);
+          if (Number.isNaN(timestamp)) return null;
+          return toSensorReading(entry, timestamp, key);
+        })
+        .filter((reading): reading is SensorReading => reading !== null);
+    };
+
+    const warningRef = dbHelpers.getHistoryByStatusRef('WARNING', 300);
+    const criticalRef = dbHelpers.getHistoryByStatusRef('CRITICAL', 300);
+
+    const unsubWarning = onValue(warningRef, (snapshot) => {
+      setWarningReadings(toReadings(snapshot.val()));
+    });
+    const unsubCritical = onValue(criticalRef, (snapshot) => {
+      setCriticalReadings(toReadings(snapshot.val()));
+    });
+
+    return () => {
+      unsubWarning();
+      unsubCritical();
+    };
+  }, []);
+
+  useEffect(() => {
+    const seen = new Set<string>();
+    const merged = [...criticalReadings, ...warningReadings]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .map(generateAlert)
+      .filter((alert): alert is Alert => alert !== null)
+      .filter((alert) => {
+        if (seen.has(alert.id)) return false;
+        seen.add(alert.id);
+        return true;
+      });
+
+    setAlerts(merged);
+  }, [warningReadings, criticalReadings]);
 
   useEffect(() => {
     setChartData(buildChartData(history, currentTimeRange));

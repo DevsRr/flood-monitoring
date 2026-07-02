@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getDatabase, ref, onValue, off, query, limitToLast, orderByChild, set, push, update, get } from 'firebase/database';
+import { getDatabase, ref, onValue, off, query, limitToLast, orderByChild, equalTo, set, push, update, get } from 'firebase/database';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDVLgBYZRQ25jOH3q141w1dyj2kTxUWNDE",
@@ -33,9 +33,18 @@ export const dbHelpers = {
     return ref(database, DB_PATHS.CURRENT_STATE);
   },
 
-  getHistoryRef: (limit: number = 100) => {
+  getHistoryRef: (limit: number = 500) => {
     return query(
       ref(database, DB_PATHS.HISTORY),
+      limitToLast(limit)
+    );
+  },
+
+  getHistoryByStatusRef: (status: 'WARNING' | 'CRITICAL', limit: number = 300) => {
+    return query(
+      ref(database, DB_PATHS.HISTORY),
+      orderByChild('status'),
+      equalTo(status),
       limitToLast(limit)
     );
   },
@@ -61,5 +70,5 @@ export const dbHelpers = {
   },
 };
 
-export { ref, onValue, off, query, limitToLast, orderByChild, set, push, update, get };
+export { ref, onValue, off, query, limitToLast, orderByChild, equalTo, set, push, update, get };
 export default app;

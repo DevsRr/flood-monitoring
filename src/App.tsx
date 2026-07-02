@@ -190,12 +190,13 @@ const Dashboard = ({ user, onLogin, onSignOut }: DashboardProps) => {
 
   useEffect(() => {
     alerts
-      .filter((alert) => alert.type === 'flood_warning' && !alert.acknowledged && alert.severity === 'critical')
+      .filter((alert) => alert.type === 'flood_warning' && !alert.acknowledged && (alert.severity === 'critical' || alert.severity === 'high'))
       .forEach((alert) => {
         if (shownAlertIds.current.has(alert.id)) return;
         shownAlertIds.current.add(alert.id);
 
-        toast.error(alert.message, {
+        const toastFn = alert.severity === 'critical' ? toast.error : toast.warning;
+        toastFn(alert.message, {
           description: new Date(alert.timestamp).toLocaleString([], {
             month: 'short',
             day: 'numeric',
