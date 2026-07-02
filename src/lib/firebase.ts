@@ -21,15 +21,16 @@ export const auth = getAuth(app);
 export const DB_PATHS = {
   CURRENT: 'floodmonitoring',
   CURRENT_STATUS: 'floodmonitoring/currentStatus',
-  SENSORS: 'floodmonitoring/sensors',
-  MANUAL: 'floodmonitoring/manual',
+  CURRENT_STATE: 'floodmonitoring/current',
+  COMPONENTS: 'floodmonitoring/components',
   HISTORY: 'floodmonitoring/history',
   USERS: 'floodmonitoring/users',
+  MANUAL_SIREN: 'floodmonitoring/current/relays/siren',
 } as const;
 
 export const dbHelpers = {
   getCurrentRef: () => {
-    return ref(database, DB_PATHS.CURRENT_STATUS);
+    return ref(database, DB_PATHS.CURRENT_STATE);
   },
 
   getHistoryRef: (limit: number = 100) => {
@@ -51,12 +52,12 @@ export const dbHelpers = {
     return ref(database, `${DB_PATHS.USERS}/${uid}`);
   },
 
-  getSensorsRef: () => {
-    return ref(database, DB_PATHS.SENSORS);
+  getComponentsRef: () => {
+    return ref(database, DB_PATHS.COMPONENTS);
   },
 
   getManualSirenRef: () => {
-    return ref(database, `${DB_PATHS.MANUAL}/siren`);
+    return ref(database, DB_PATHS.MANUAL_SIREN);
   },
 };
 

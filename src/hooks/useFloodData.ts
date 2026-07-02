@@ -26,6 +26,7 @@ interface Esp32Current {
   status?: string;
   time?: string;
   updatedAt?: string;
+  timestamp?: string;
 }
 
 interface Esp32HistoryEntry extends Esp32Current {
@@ -36,12 +37,19 @@ interface Esp32HistoryEntry extends Esp32Current {
   createdBy?: string;
 }
 
-interface SensorSwitches {
-  green?: number;
-  orange?: number;
-  red?: number;
-  siren?: number;
-  ultrasonic?: number;
+interface ComponentEntry {
+  name?: string;
+  online?: number;
+  relay?: number;
+  voltage?: number;
+}
+
+interface ComponentsNode {
+  green?: ComponentEntry;
+  orange?: ComponentEntry;
+  red?: ComponentEntry;
+  siren?: ComponentEntry;
+  ultrasonic?: ComponentEntry;
 }
 
 export type TimeRange = '1h' | '6h' | '24h' | '1w' | '1m' | '1y';
@@ -59,6 +67,7 @@ const mapEsp32Status = (esp32Status?: string): NormalizedStatus => {
   switch (esp32Status?.toUpperCase()) {
     case 'LOW':
     case 'NORMAL':
+    case 'SAFE':
       return 'normal';
     case 'MEDIUM':
     case 'MODERATE':
@@ -78,19 +87,39 @@ const getRawWaterLevel = (raw: Esp32Current): number | null => {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 };
 
+// Keys look like "2026-07-02T14-19-14-08-00", which is an ISO timestamp
+// (2026-07-02T14:19:14+08:00) with ':' and '+' swapped for '-' so it's a
+// valid Firebase key. This reconstructs the original ISO string.
+const parseHistoryKey = (key: string): number => {
+  const [datePart, timePart] = key.split('T');
+  if (!datePart || !timePart) return NaN;
+
+  const segments = timePart.split('-').filter(Boolean);
+  if (segments.length < 3) return NaN;
+
+  const [hh, mm, ss, tzHH, tzMM] = segments;
+  const timezone = tzHH && tzMM ? `+${tzHH}:${tzMM}` : '';
+  const isoString = `${datePart}T${hh}:${mm}:${ss}${timezone}`;
+  return Date.parse(isoString);
+};
+
 const keyToTimestamp = (key: string, entry?: Esp32HistoryEntry): number => {
-  const candidateTime = entry?.time ?? entry?.updatedAt;
+  const candidateTime = entry?.timestamp ?? entry?.time ?? entry?.updatedAt;
   if (candidateTime) {
     const parsed = Date.parse(candidateTime.replace(' ', 'T'));
     if (!Number.isNaN(parsed)) return parsed;
   }
 
+  const fromKey = parseHistoryKey(key);
+  if (!Number.isNaN(fromKey)) return fromKey;
+
+  // Legacy fallback for older "2026-07-02_14-19-14" style keys
   const [datePart, timePart] = key.split('_');
-  if (!datePart || !timePart) return Date.now();
+  if (!datePart || !timePart) return NaN;
 
   const isoString = `${datePart}T${timePart.replace(/-/g, ':')}`;
   const parsed = Date.parse(isoString);
-  return Number.isNaN(parsed) ? Date.now() : parsed;
+  return parsed;
 };
 
 const toSensorReading = (
@@ -203,12 +232,14 @@ const buildChartData = (readings: SensorReading[], range: TimeRange): ChartDataP
   return aggregated;
 };
 
-const toComponentStatus = (sensors: SensorSwitches): ComponentStatus => ({
-  redLedOnline: sensors.red === 1,
-  orangeLedOnline: sensors.orange === 1,
-  greenLedOnline: sensors.green === 1,
-  ultrasonicOnline: sensors.ultrasonic === 1,
-  sirenOn: sensors.siren === 1,
+const isComponentOnline = (component?: ComponentEntry): boolean => component?.online === 1;
+
+const toComponentStatus = (components: ComponentsNode): ComponentStatus => ({
+  redLedOnline: isComponentOnline(components.red),
+  orangeLedOnline: isComponentOnline(components.orange),
+  greenLedOnline: isComponentOnline(components.green),
+  ultrasonicOnline: isComponentOnline(components.ultrasonic),
+  sirenOn: isComponentOnline(components.siren),
 });
 
 export const useFloodData = (listenToSensors = false) => {
@@ -255,34 +286,20 @@ export const useFloodData = (listenToSensors = false) => {
           return;
         }
 
-        const raw = snapshot.val();
-        const rawCurrent = raw.currentStatus ?? raw.sensors ?? raw;
-        const timestamp = Date.now();
-        const reading = toSensorReading(rawCurrent, timestamp);
-
-        if (!reading) {
-          setLoading(false);
-          return;
-        }
-
+        const raw = snapshot.val() as Esp32Current;
+        const status = mapEsp32Status(raw.status);
         const updateTime = new Date();
-        setStation((previous) => ({
-          ...(previous ?? STATION_CONFIG),
-          currentReading: reading,
-          history: previous?.history ?? [],
-        }));
+
         setLastUpdate(updateTime);
         setIsConnected(true);
         setLoading(false);
         setStats((previous) => ({
           ...previous,
-          activeStations: reading.status !== 'offline' ? 1 : 0,
-          moderateStations: reading.status === 'moderate' ? 1 : 0,
-          warningStations: reading.status === 'warning' ? 1 : 0,
-          criticalStations: reading.status === 'critical' ? 1 : 0,
-          offlineStations: reading.status === 'offline' ? 1 : 0,
-          avgWaterLevel: reading.waterLevel,
-          maxWaterLevel: Math.max(previous.maxWaterLevel, reading.waterLevel),
+          activeStations: status !== 'offline' ? 1 : 0,
+          moderateStations: status === 'moderate' ? 1 : 0,
+          warningStations: status === 'warning' ? 1 : 0,
+          criticalStations: status === 'critical' ? 1 : 0,
+          offlineStations: status === 'offline' ? 1 : 0,
         }));
       },
       () => {
@@ -309,13 +326,13 @@ export const useFloodData = (listenToSensors = false) => {
       return;
     }
 
-    const sensorsRef = dbHelpers.getSensorsRef();
+    const componentsRef = dbHelpers.getComponentsRef();
 
     const unsubscribe = onValue(
-      sensorsRef,
+      componentsRef,
       (snapshot) => {
-        const sensors = (snapshot.val() ?? {}) as SensorSwitches;
-        const nextStatus = toComponentStatus(sensors);
+        const components = (snapshot.val() ?? {}) as ComponentsNode;
+        const nextStatus = toComponentStatus(components);
         const updateTime = new Date();
 
         setComponentStatus(nextStatus);
@@ -372,20 +389,21 @@ export const useFloodData = (listenToSensors = false) => {
 
         const raw = snapshot.val() as Record<string, Esp32HistoryEntry>;
         const readings = Object.entries(raw)
-          .map(([key, entry]) => toSensorReading(entry, keyToTimestamp(key, entry), key))
+          .map(([key, entry]) => {
+            const timestamp = keyToTimestamp(key, entry);
+            if (Number.isNaN(timestamp)) return null;
+            return toSensorReading(entry, timestamp, key);
+          })
           .filter((reading): reading is SensorReading => reading !== null)
           .sort((a, b) => a.timestamp - b.timestamp);
 
         setHistory(readings);
-        setStation((previous) =>
-          previous
-            ? { ...previous, history: readings }
-            : {
-                ...STATION_CONFIG,
-                currentReading: readings[readings.length - 1],
-                history: readings,
-              }
-        );
+        const latestReading = readings[readings.length - 1];
+        setStation((previous) => ({
+          ...(previous ?? STATION_CONFIG),
+          currentReading: latestReading ?? previous?.currentReading,
+          history: readings,
+        }));
 
         const historyAlerts = readings
           .filter((reading) => ['moderate', 'warning', 'critical'].includes(reading.status))
