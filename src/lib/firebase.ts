@@ -24,7 +24,7 @@ export const DB_PATHS = {
   CURRENT_STATE: 'floodmonitoring/current',
   COMPONENTS: 'floodmonitoring/components',
   HISTORY: 'floodmonitoring/history',
-  USERS: 'floodmonitoring/users',
+  USERS: 'users',
   MANUAL_SIREN: 'floodmonitoring/current/relays/siren',
 } as const;
 

@@ -1,27 +1,31 @@
 {
   "rules": {
+    "users": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin' && root.child('users').child(auth.uid).child('disabled').val() !== true",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'email', 'role', 'disabled']) && (newData.child('role').val() === 'Admin' || newData.child('role').val() === 'User')"
+      }
+    },
     "floodmonitoring": {
-      ".write": "auth != null && root.child('floodmonitoring/users').child(auth.uid).child('role').val() === 'Admin' && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
-      "currentStatus": {
-        ".read": true
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin' && root.child('users').child(auth.uid).child('disabled').val() !== true",
+      "components": {
+        ".read": true,
+        ".write": true
       },
-      "users": {
-        ".read": "auth != null && root.child('floodmonitoring/users').child(auth.uid).child('role').val() === 'Admin' && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
-        "$uid": {
-          ".validate": "newData.hasChildren(['name', 'email', 'role', 'disabled']) && (newData.child('role').val() === 'Admin' || newData.child('role').val() === 'User')"
-        }
+      "controls": {
+        ".read": true,
+        ".write": true
+      },
+      "current": {
+        ".read": true,
+        ".write": true
       },
       "history": {
         ".read": true,
+        ".write": true,
         "$recordKey": {
           ".validate": "newData.hasChild('status') && newData.hasChild('time')"
-        }
-      },
-      "sensors": {
-        ".read": "auth != null && root.child('floodmonitoring/users').child(auth.uid).child('role').val() === 'Admin' && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
-        "$sensorName": {
-          ".write": "auth != null && root.child('floodmonitoring/users').child(auth.uid).child('role').val() === 'Admin' && root.child('floodmonitoring/users').child(auth.uid).child('disabled').val() !== true",
-          ".validate": "newData.val() === 0 || newData.val() === 1"
         }
       }
     }
