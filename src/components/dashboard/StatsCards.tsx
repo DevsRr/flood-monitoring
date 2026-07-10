@@ -19,11 +19,11 @@ interface StatsCardsProps {
 }
 
 const getTrend = (current: number, previous?: number) => {
-  if (previous === undefined) return { icon: Minus, color: 'text-slate-500', value: '0' };
-  const diff = current - previous;
+  if (previous === undefined) return { icon: Minus, color: 'text-slate-500', value: '0.00' };
+  const diff = (current - previous) / 100;
   if (diff > 0) return { icon: TrendingUp, color: 'text-red-500', value: `+${diff.toFixed(2)}` };
   if (diff < 0) return { icon: TrendingDown, color: 'text-emerald-500', value: diff.toFixed(2) };
-  return { icon: Minus, color: 'text-slate-500', value: '0' };
+  return { icon: Minus, color: 'text-slate-500', value: '0.00' };
 };
 
 const getStatusColor = (status: string) => {
@@ -45,15 +45,6 @@ const getStatusColor = (status: string) => {
 
 export const StatsCards = ({ stats, currentReading, componentStatus }: StatsCardsProps) => {
   const waterLevelTrend = getTrend(currentReading?.waterLevel || 0, (currentReading?.waterLevel || 0) - 0.1);
-  const onlineComponents = componentStatus
-    ? [
-        componentStatus.redLedOnline,
-        componentStatus.orangeLedOnline,
-        componentStatus.greenLedOnline,
-        componentStatus.ultrasonicOnline,
-        componentStatus.sirenOn,
-      ].filter(Boolean).length
-    : 0;
 
   const cards = [
     {
@@ -66,7 +57,7 @@ export const StatsCards = ({ stats, currentReading, componentStatus }: StatsCard
     },
     {
       title: 'Water Level',
-      value: `${currentReading?.waterLevel?.toFixed(2) || '--'} cm`,
+      value: currentReading?.waterLevel ? `${(currentReading.waterLevel / 100).toFixed(2)} m` : '-- m',
       icon: Droplets,
       color: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
       trend: waterLevelTrend,
@@ -74,7 +65,7 @@ export const StatsCards = ({ stats, currentReading, componentStatus }: StatsCard
     },
     {
       title: 'Avg Level',
-      value: `${stats.avgWaterLevel.toFixed(2)} cm`,
+      value: `${(stats.avgWaterLevel / 100).toFixed(2)} m`,
       icon: Droplets,
       color: 'text-cyan-500 bg-cyan-500/10 border-cyan-500/20',
       trend: null,
@@ -82,7 +73,7 @@ export const StatsCards = ({ stats, currentReading, componentStatus }: StatsCard
     },
     {
       title: 'Max Level',
-      value: `${stats.maxWaterLevel.toFixed(2)} cm`,
+      value: `${(stats.maxWaterLevel / 100).toFixed(2)} m`,
       icon: Droplets,
       color: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/20',
       trend: null,
@@ -107,20 +98,10 @@ export const StatsCards = ({ stats, currentReading, componentStatus }: StatsCard
       trend: null,
       subtitle: 'Flood Warnings'
     },
-    ...(componentStatus ? [{
-      title: 'Component Status',
-      value: `${onlineComponents}/5`,
-      icon: Cpu,
-      color: componentStatus.ultrasonicOnline
-        ? 'text-teal-500 bg-teal-500/10 border-teal-500/20'
-        : 'text-slate-500 bg-slate-500/10 border-slate-500/20',
-      trend: null,
-      subtitle: 'Online'
-    }] : [])
   ];
 
   return (
-    <div className={`grid grid-cols-2 sm:grid-cols-3 ${componentStatus ? 'lg:grid-cols-7' : 'lg:grid-cols-6'} gap-3`}>
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       {cards.map((card, index) => (
         <Card 
           key={index} 
@@ -139,7 +120,7 @@ export const StatsCards = ({ stats, currentReading, componentStatus }: StatsCard
             {card.trend && (
               <div className={`flex items-center gap-1 text-[10px] sm:text-xs mt-0.5 ${card.trend.color}`}>
                 <card.trend.icon className="h-3 w-3" />
-                <span className="truncate">{card.trend.value}cm</span>
+                <span className="truncate">{card.trend.value}m</span>
               </div>
             )}
             {card.subtitle && !card.trend && (

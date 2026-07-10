@@ -36,11 +36,12 @@ interface ChartTooltipProps {
 
 const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
   if (active && payload && payload.length) {
+    const val = typeof payload[0].value === 'number' ? payload[0].value : 0;
     return (
       <div className="bg-background border rounded-lg p-2 sm:p-3 shadow-lg text-xs sm:text-sm">
         <p className="font-semibold mb-1">{label}</p>
         <p style={{ color: '#3b82f6' }}>
-          Water Level: {payload[0].value} cm
+          Water Level: {(val / 100).toFixed(2)} m
         </p>
       </div>
     );
@@ -76,13 +77,13 @@ export const StationDetail = ({ station, history }: StationDetailProps) => {
   const trend = getTrend(reading.waterLevel, prevReading.waterLevel);
   const waterLevels = history.map(h => h.waterLevel);
   const avgWaterLevel = waterLevels.length > 0 
-    ? (waterLevels.reduce((a, b) => a + b, 0) / waterLevels.length).toFixed(2)
+    ? ((waterLevels.reduce((a, b) => a + b, 0) / waterLevels.length) / 100).toFixed(2)
     : '--';
   const maxWaterLevel = waterLevels.length > 0
-    ? Math.max(...waterLevels).toFixed(2)
+    ? (Math.max(...waterLevels) / 100).toFixed(2)
     : '--';
   const minWaterLevel = waterLevels.length > 0
-    ? Math.min(...waterLevels).toFixed(2)
+    ? (Math.min(...waterLevels) / 100).toFixed(2)
     : '--';
 
   return (
@@ -124,7 +125,7 @@ export const StationDetail = ({ station, history }: StationDetailProps) => {
               <trend.icon className={`h-4 w-4 ${trend.color}`} />
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground">Current Level</p>
-            <p className="text-lg sm:text-xl font-bold">{reading.waterLevel.toFixed(2)}cm</p>
+            <p className="text-lg sm:text-xl font-bold">{(reading.waterLevel / 100).toFixed(2)} m</p>
           </div>
           
           <div className="p-3 rounded-lg border bg-card">
@@ -134,7 +135,7 @@ export const StationDetail = ({ station, history }: StationDetailProps) => {
               </div>
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground">Average</p>
-            <p className="text-lg sm:text-xl font-bold">{avgWaterLevel}cm</p>
+            <p className="text-lg sm:text-xl font-bold">{avgWaterLevel} m</p>
           </div>
           
           <div className="p-3 rounded-lg border bg-card">
@@ -144,7 +145,7 @@ export const StationDetail = ({ station, history }: StationDetailProps) => {
               </div>
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground">Maximum</p>
-            <p className="text-lg sm:text-xl font-bold">{maxWaterLevel}cm</p>
+            <p className="text-lg sm:text-xl font-bold">{maxWaterLevel} m</p>
           </div>
           
           <div className="p-3 rounded-lg border bg-card">
@@ -154,7 +155,7 @@ export const StationDetail = ({ station, history }: StationDetailProps) => {
               </div>
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground">Minimum</p>
-            <p className="text-lg sm:text-xl font-bold">{minWaterLevel}cm</p>
+            <p className="text-lg sm:text-xl font-bold">{minWaterLevel} m</p>
           </div>
         </div>
 
@@ -181,11 +182,12 @@ export const StationDetail = ({ station, history }: StationDetailProps) => {
               <YAxis 
                 tick={{ fontSize: 9 }} 
                 domain={['auto', 'auto']}
-                width={30}
+                width={40}
+                tickFormatter={(v: number) => `${(v / 100).toFixed(2)}m`}
               />
               <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine y={15.24} stroke="#f59e0b" strokeDasharray="3 3" label={{ value: 'Warn', position: 'right', fontSize: 9 }} />
-              <ReferenceLine y={22.86} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'Crit', position: 'right', fontSize: 9 }} />
+              <ReferenceLine y={15.24} stroke="#f59e0b" strokeDasharray="3 3" label={{ value: 'Warn (0.15m)', position: 'right', fontSize: 9 }} />
+              <ReferenceLine y={22.86} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'Crit (0.23m)', position: 'right', fontSize: 9 }} />
               <Area
                 type="monotone"
                 dataKey="waterLevel"

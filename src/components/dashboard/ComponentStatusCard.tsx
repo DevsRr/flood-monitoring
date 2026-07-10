@@ -11,6 +11,7 @@ interface ComponentStatusCardProps {
   manualSirenOn: boolean;
   manualSirenLastUpdate: Date;
   onSirenToggle: (enabled: boolean) => Promise<void>;
+  onCardClick?: (componentKey: string, componentName: string) => void;
 }
 
 const formatTimestamp = (date: Date) => (
@@ -38,39 +39,60 @@ export const ComponentStatusCard = ({
   manualSirenOn,
   manualSirenLastUpdate,
   onSirenToggle,
+  onCardClick,
 }: ComponentStatusCardProps) => {
   const cards = [
     {
+      key: 'red',
       title: 'Red LED',
       online: status.redLedOnline,
       icon: Circle,
       timestamp: lastUpdate,
+      show: true,
+      colorClass: 'text-rose-500',
+      bgClass: 'bg-rose-500/10',
     },
     {
+      key: 'orange',
       title: 'Orange LED',
       online: status.orangeLedOnline,
       icon: Circle,
       timestamp: lastUpdate,
+      show: true,
+      colorClass: 'text-amber-500',
+      bgClass: 'bg-amber-500/10',
     },
     {
+      key: 'green',
       title: 'Green LED',
       online: status.greenLedOnline,
       icon: Circle,
       timestamp: lastUpdate,
+      show: true,
+      colorClass: 'text-emerald-500',
+      bgClass: 'bg-emerald-500/10',
     },
     {
+      key: 'ultrasonic',
       title: 'Ultrasonic Sensor',
       online: status.ultrasonicOnline,
       icon: Radar,
       timestamp: lastUpdate,
+      show: status.hasUltrasonic,
+      colorClass: 'text-indigo-500',
+      bgClass: 'bg-indigo-500/10',
     },
     {
+      key: 'siren',
       title: 'Siren Status',
       online: status.sirenOn,
       icon: Siren,
       timestamp: sirenLastUpdate,
+      show: true,
+      colorClass: 'text-blue-500',
+      bgClass: 'bg-blue-500/10',
     },
-  ];
+  ].filter((card) => card.show);
 
   return (
     <section className="space-y-3">
@@ -85,31 +107,35 @@ export const ComponentStatusCard = ({
           return (
             <Card
               key={card.title}
-              className={`${getBadgeClass(card.online)} border-2 hover:shadow-md transition-all duration-300`}
+              onClick={() => onCardClick?.(card.key, card.title)}
+              className="bg-card text-card-foreground border hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer transition-all duration-200"
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 p-3">
                 <CardTitle className="text-xs font-medium truncate">{card.title}</CardTitle>
-                <div className="p-1.5 rounded-md bg-white/50 shrink-0">
-                  <Icon className="h-4 w-4" />
+                <div className={`p-1.5 rounded-md ${card.bgClass} shrink-0`}>
+                  <Icon className={`h-4 w-4 ${card.colorClass}`} />
                 </div>
               </CardHeader>
-              <CardContent className="p-3 pt-0 space-y-2">
-                <StatusBadge online={card.online} />
+              <CardContent className="p-3 pt-0">
                 <p className="text-[10px] opacity-70">Updated: {formatTimestamp(card.timestamp)}</p>
               </CardContent>
             </Card>
           );
         })}
 
-        <Card className={`${getBadgeClass(manualSirenOn)} border-2 hover:shadow-md transition-all duration-300`}>
+        <Card className="bg-card text-card-foreground border hover:shadow-md transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 p-3">
             <CardTitle className="text-xs font-medium truncate">Manual Override</CardTitle>
-            <div className="p-1.5 rounded-md bg-white/50 shrink-0">
-              <Siren className="h-4 w-4" />
+            <div className="p-1.5 rounded-md bg-violet-500/10 shrink-0">
+              <Siren className="h-4 w-4 text-violet-500" />
             </div>
           </CardHeader>
           <CardContent className="p-3 pt-0 space-y-2">
-            <Badge variant="outline" className={`text-[10px] h-5 px-1.5 ${getBadgeClass(manualSirenOn)}`}>
+            <Badge variant="outline" className={`text-[10px] h-5 px-1.5 ${
+              manualSirenOn 
+                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' 
+                : 'bg-red-500/10 text-red-600 border-red-500/30'
+            }`}>
               {manualSirenOn ? 'ON' : 'OFF'}
             </Badge>
             <div className="flex items-center justify-between gap-3 rounded-md border bg-background/60 px-3 py-2">

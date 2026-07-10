@@ -59,6 +59,8 @@ export interface ComponentStatus {
   greenLedOnline: boolean;
   ultrasonicOnline: boolean;
   sirenOn: boolean;
+  hasUltrasonic: boolean;
+  totalComponents: number;
 }
 
 export interface AppUser {
@@ -66,5 +68,23 @@ export interface AppUser {
   name: string;
   email: string;
   role: 'Admin' | 'User';
-  disabled: boolean;
+  disabled?: boolean;
+}
+
+export interface ComponentHistoryRecord {
+  id: string;
+  timestamp: string;
+  online: number;
+  voltage: number;
+  relay: number;
+  name: string;
+}
+
+export interface DiagnosticAlert {
+  id: string;
+  componentKey: string;
+  name: string;
+  severity: 'critical' | 'high' | 'medium';
+  message: string;
+  timestamp: string;
 }

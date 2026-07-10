@@ -1,0 +1,62 @@
+{
+  "floodmonitoring": {
+    "components": {
+      "green": {
+        "name": "Green LED",
+        "online": 0,
+        "relay": 1,
+        "voltage": 0
+      },
+      "orange": {
+        "name": "Orange LED",
+        "online": 0,
+        "relay": 0,
+        "voltage": 0
+      },
+      "red": {
+        "name": "Red LED",
+        "online": 0,
+        "relay": 0,
+        "voltage": 0
+      },
+      "siren": {
+        "name": "Siren",
+        "online": 0,
+        "relay": 0,
+        "voltage": 0
+      }
+    },
+    "current": {
+      "date": "07/10/2026",
+      "manualMode": false,
+      "relays": {
+        "green": 1,
+        "orange": 0,
+        "red": 0,
+        "siren": 0
+      },
+      "status": "NORMAL",
+      "time": "03:10:18 PM",
+      "timestamp": "07/10/2026 03:10:18 PM",
+      "voltage": {
+        "green": 0,
+        "orange": 0,
+        "red": 0,
+        "siren": 0
+      },
+      "waterlevel": 0
+    }
+  },
+  "users": {
+    "FrLhg5wccMRV2EC6YM5yNA6eBdE3": {
+      "email": "admin@example.com",
+      "name": "Admin",
+      "role": "Admin"
+    },
+    "mbs1Do0s6MaPT8zep31HcAMAtSs1": {
+      "email": "admin@admin.com",
+      "name": "Admin",
+      "role": "Admin"
+    }
+  }
+}

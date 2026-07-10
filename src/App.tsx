@@ -14,6 +14,7 @@ import { MainChart } from '@/components/dashboard/MainChart';
 import { AlertsPanel } from '@/components/dashboard/AlertsPanel';
 import { StationDetail } from '@/components/dashboard/StationDetail';
 import { ComponentStatusCard } from '@/components/dashboard/ComponentStatusCard';
+import { ComponentHistoryPage } from '@/components/dashboard/ComponentHistoryPage';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -178,7 +179,17 @@ const Dashboard = ({ user, onLogin, onSignOut }: DashboardProps) => {
     acknowledgeAlert,
     updateSirenStatus,
     setTimeRange,
+    componentHistories,
+    diagnosticAlerts,
   } = useFloodData(isAdmin);
+
+  const [activeComponentKey, setActiveComponentKey] = useState<string | null>(null);
+  const [activeComponentName, setActiveComponentName] = useState<string>('');
+
+  const handleCardClick = useCallback((componentKey: string, componentName: string) => {
+    setActiveComponentKey(componentKey);
+    setActiveComponentName(componentName);
+  }, []);
 
   const shownAlertIds = useRef<Set<string>>(new Set());
 
@@ -254,57 +265,77 @@ const Dashboard = ({ user, onLogin, onSignOut }: DashboardProps) => {
       />
 
       <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
-        <section className="mb-4 sm:mb-6">
-          <StatsCards
-            stats={stats}
-            currentReading={station?.currentReading}
-            componentStatus={isAdmin ? componentStatus : undefined}
+        {activeComponentKey ? (
+          <ComponentHistoryPage
+            componentKey={activeComponentKey}
+            componentName={activeComponentName}
+            isOnline={
+              activeComponentKey === 'red' ? componentStatus.redLedOnline :
+              activeComponentKey === 'orange' ? componentStatus.orangeLedOnline :
+              activeComponentKey === 'green' ? componentStatus.greenLedOnline :
+              activeComponentKey === 'ultrasonic' ? componentStatus.ultrasonicOnline :
+              activeComponentKey === 'siren' ? componentStatus.sirenOn : false
+            }
+            history={componentHistories[activeComponentKey] ?? []}
+            onBack={() => setActiveComponentKey(null)}
           />
-        </section>
+        ) : (
+          <>
+            <section className="mb-4 sm:mb-6">
+              <StatsCards
+                stats={stats}
+                currentReading={station?.currentReading}
+                componentStatus={isAdmin ? componentStatus : undefined}
+              />
+            </section>
 
-        {isAdmin && (
-          <section className="mb-4 sm:mb-6">
-            <ComponentStatusCard
-              status={componentStatus}
-              lastUpdate={sensorLastUpdate}
-              sirenLastUpdate={sirenLastUpdate}
-              manualSirenOn={manualSirenOn}
-              manualSirenLastUpdate={manualSirenLastUpdate}
-              onSirenToggle={handleSirenToggle}
-            />
-          </section>
+            {isAdmin && (
+              <section className="mb-4 sm:mb-6">
+                <ComponentStatusCard
+                  status={componentStatus}
+                  lastUpdate={sensorLastUpdate}
+                  sirenLastUpdate={sirenLastUpdate}
+                  manualSirenOn={manualSirenOn}
+                  manualSirenLastUpdate={manualSirenLastUpdate}
+                  onSirenToggle={handleSirenToggle}
+                  onCardClick={handleCardClick}
+                />
+              </section>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6 mb-4 sm:mb-6">
+              <div className="lg:col-span-2">
+                <MainChart
+                  data={chartData}
+                  onTimeRangeChange={handleTimeRangeChange}
+                  currentRange={currentTimeRange}
+                />
+              </div>
+
+              <div className="lg:col-span-1">
+                <AlertsPanel
+                  alerts={alerts}
+                  diagnosticAlerts={diagnosticAlerts}
+                  canAcknowledge={isAdmin}
+                  onAcknowledge={handleAcknowledge}
+                />
+              </div>
+            </div>
+
+            {station && (
+              <section className="mb-4 sm:mb-6">
+                <StationDetail
+                  station={station}
+                  history={chartData}
+                />
+              </section>
+            )}
+
+            <section className="mb-4 sm:mb-6">
+              <HistoryTable history={history.slice(-20).reverse()} />
+            </section>
+          </>
         )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6 mb-4 sm:mb-6">
-          <div className="lg:col-span-2">
-            <MainChart
-              data={chartData}
-              onTimeRangeChange={handleTimeRangeChange}
-              currentRange={currentTimeRange}
-            />
-          </div>
-
-          <div className="lg:col-span-1">
-            <AlertsPanel
-              alerts={alerts}
-              canAcknowledge={isAdmin}
-              onAcknowledge={handleAcknowledge}
-            />
-          </div>
-        </div>
-
-        {station && (
-          <section className="mb-4 sm:mb-6">
-            <StationDetail
-              station={station}
-              history={chartData}
-            />
-          </section>
-        )}
-
-        <section className="mb-4 sm:mb-6">
-          <HistoryTable history={history.slice(-20).reverse()} />
-        </section>
 
         <footer className="mt-8 sm:mt-12 py-4 sm:py-6 border-t">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 text-xs text-muted-foreground">
@@ -436,7 +467,7 @@ const HistoryTable = ({ history }: HistoryTableProps) => {
                   })}
                 </td>
                 <td className="px-2 sm:px-4 py-2 sm:py-3 font-medium whitespace-nowrap">
-                  {reading.waterLevel.toFixed(2)} cm
+                  {(reading.waterLevel / 100).toFixed(2)} m
                 </td>
                 <td className="px-2 sm:px-4 py-2 sm:py-3">
                   <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-medium border ${getStatusBadge(reading.status)}`}>

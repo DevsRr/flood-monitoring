@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -5,12 +6,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   AlertTriangle, 
   Check,
-  Clock
+  Clock,
+  Wrench
 } from 'lucide-react';
-import type { Alert } from '@/types/floodData';
+import type { Alert, DiagnosticAlert } from '@/types/floodData';
 
 interface AlertsPanelProps {
   alerts: Alert[];
+  diagnosticAlerts: DiagnosticAlert[];
   canAcknowledge: boolean;
   onAcknowledge: (alertId: string) => Promise<void>;
 }
@@ -37,7 +40,14 @@ const getSeverityBorder = (severity: string) => {
   }
 };
 
-export const AlertsPanel = ({ alerts, canAcknowledge, onAcknowledge }: AlertsPanelProps) => {
+export const AlertsPanel = ({ 
+  alerts, 
+  diagnosticAlerts,
+  canAcknowledge, 
+  onAcknowledge 
+}: AlertsPanelProps) => {
+  const [activeTab, setActiveTab] = useState<'flood' | 'diagnostics'>('flood');
+  
   const floodAlerts = alerts.filter(a => a.type === 'flood_warning');
   const unacknowledgedAlerts = floodAlerts.filter(a => !a.acknowledged);
   const acknowledgedAlerts = floodAlerts.filter(a => a.acknowledged);
@@ -103,47 +113,122 @@ export const AlertsPanel = ({ alerts, canAcknowledge, onAcknowledge }: AlertsPan
     </div>
   );
 
+  const renderDiagnosticAlert = (alert: DiagnosticAlert) => (
+    <div
+      key={alert.id}
+      className={`
+        p-3 rounded-lg border-2 mb-2 transition-all duration-200
+        ${getSeverityBorder(alert.severity)}
+      `}
+    >
+      {/* Top row: icon + title + badge */}
+      <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+        <Wrench className={`h-4 w-4 shrink-0 ${
+          alert.severity === 'critical' ? 'text-red-500 animate-pulse' :
+          alert.severity === 'high'     ? 'text-orange-500' :
+          'text-amber-500'
+        }`} />
+        <span className="font-semibold text-xs sm:text-sm">System Diagnostics</span>
+        <Badge
+          variant="outline"
+          className={`${getSeverityColor(alert.severity)} text-[10px] px-1.5 py-0 h-5`}
+        >
+          {alert.severity === 'critical' ? 'FAULT' : alert.severity === 'high' ? 'CHECK' : 'WARN'}
+        </Badge>
+      </div>
+
+      {/* Message */}
+      <p className="text-xs text-muted-foreground break-words">
+        {alert.message}
+      </p>
+    </div>
+  );
+
   return (
-    <Card className="h-full">
-      <CardHeader className="p-3 sm:p-4">
+    <Card className="h-full flex flex-col">
+      <CardHeader className="p-3 sm:p-4 pb-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CardTitle className="text-sm sm:text-base font-semibold">Flood Alerts</CardTitle>
-            {unacknowledgedAlerts.length > 0 && (
-              <Badge variant="destructive" className="animate-pulse text-xs h-5 px-1.5">
-                {unacknowledgedAlerts.length}
-              </Badge>
-            )}
-          </div>
+          <CardTitle className="text-sm sm:text-base font-semibold">Alert Center</CardTitle>
+          {unacknowledgedAlerts.length > 0 && activeTab === 'flood' && (
+            <Badge variant="destructive" className="animate-pulse text-xs h-5 px-1.5">
+              {unacknowledgedAlerts.length}
+            </Badge>
+          )}
+          {diagnosticAlerts.length > 0 && activeTab === 'diagnostics' && (
+            <Badge className="bg-amber-500 hover:bg-amber-600 text-white animate-pulse text-xs h-5 px-1.5">
+              {diagnosticAlerts.length}
+            </Badge>
+          )}
         </div>
       </CardHeader>
-      <CardContent className="p-0">
+      
+      {/* Tabs list */}
+      <div className="flex border-b px-3">
+        <button
+          onClick={() => setActiveTab('flood')}
+          className={`flex-1 text-center py-2 text-xs font-semibold border-b-2 transition-all duration-200 ${
+            activeTab === 'flood' 
+              ? 'border-primary text-primary' 
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Flood Warnings ({floodAlerts.filter(a => !a.acknowledged).length})
+        </button>
+        <button
+          onClick={() => setActiveTab('diagnostics')}
+          className={`flex-1 text-center py-2 text-xs font-semibold border-b-2 transition-all duration-200 ${
+            activeTab === 'diagnostics' 
+              ? 'border-primary text-primary' 
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Diagnostics ({diagnosticAlerts.length})
+        </button>
+      </div>
+
+      <CardContent className="p-0 flex-1 pt-3">
         <ScrollArea className="h-[250px] sm:h-[300px] md:h-[350px]">
           <div className="px-3 sm:px-4 pb-3 sm:pb-4">
-            {floodAlerts.length === 0 ? (
-              <div className="text-center py-6 sm:py-8 text-muted-foreground">
-                <AlertTriangle className="h-8 w-8 sm:h-10 sm:w-10 mx-auto mb-2 opacity-30" />
-                <p className="text-xs sm:text-sm">No flood warnings</p>
-              </div>
+            {activeTab === 'flood' ? (
+              floodAlerts.length === 0 ? (
+                <div className="text-center py-6 sm:py-8 text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 sm:h-10 sm:w-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-xs sm:text-sm">No flood warnings</p>
+                </div>
+              ) : (
+                <>
+                  {unacknowledgedAlerts.length > 0 && (
+                    <div className="mb-3">
+                      <h4 className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-1.5">
+                        New ({unacknowledgedAlerts.length})
+                      </h4>
+                      {unacknowledgedAlerts.map(renderAlert)}
+                    </div>
+                  )}
+                  {acknowledgedAlerts.length > 0 && (
+                    <div>
+                      <h4 className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-1.5">
+                        Acknowledged ({acknowledgedAlerts.length})
+                      </h4>
+                      {acknowledgedAlerts.map(renderAlert)}
+                    </div>
+                  )}
+                </>
+              )
             ) : (
-              <>
-                {unacknowledgedAlerts.length > 0 && (
-                  <div className="mb-3">
-                    <h4 className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-1.5">
-                      New ({unacknowledgedAlerts.length})
-                    </h4>
-                    {unacknowledgedAlerts.map(renderAlert)}
-                  </div>
-                )}
-                {acknowledgedAlerts.length > 0 && (
-                  <div>
-                    <h4 className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-1.5">
-                      Acknowledged ({acknowledgedAlerts.length})
-                    </h4>
-                    {acknowledgedAlerts.map(renderAlert)}
-                  </div>
-                )}
-              </>
+              diagnosticAlerts.length === 0 ? (
+                <div className="text-center py-6 sm:py-8 text-muted-foreground">
+                  <Wrench className="h-8 w-8 sm:h-10 sm:w-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-xs sm:text-sm">All components normal</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <h4 className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-1.5">
+                    Active System Warnings ({diagnosticAlerts.length})
+                  </h4>
+                  {diagnosticAlerts.map(renderDiagnosticAlert)}
+                </div>
+              )
             )}
           </div>
         </ScrollArea>
